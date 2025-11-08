@@ -51,7 +51,7 @@ def take_screenshot():
     return filename
 
 def play_audio(audio_file: Path):
-    """Play audio file (cross-platform)"""
+    """Play audio file (cross-platform, no window on Windows)"""
     if not audio_file.exists():
         return
     
@@ -61,13 +61,14 @@ def play_audio(audio_file: Path):
     if system == "Darwin":  # macOS
         subprocess.run(["afplay", str(audio_file)])
     elif system == "Windows":
-        # Use Windows' built-in start command (opens default media player)
-        os.startfile(str(audio_file))
-        # Wait a bit for it to finish (estimate based on file size)
-        time.sleep(5)  # Adjust if needed
+        # Use PowerShell SoundPlayer for WAV (built-in, no window, no dependencies)
+        subprocess.run([
+            "powershell", "-WindowStyle", "Hidden", "-Command",
+            f"(New-Object Media.SoundPlayer '{audio_file.absolute()}').PlaySync()"
+        ], creationflags=subprocess.CREATE_NO_WINDOW)
     else:  # Linux
         # Try various Linux audio players
-        for player in ["aplay", "paplay", "ffplay", "mpg123"]:
+        for player in ["paplay", "aplay", "ffplay", "mpg123"]:
             try:
                 subprocess.run([player, str(audio_file)], check=True)
                 break
@@ -125,7 +126,7 @@ async def process_screenshots(include_minecraft=False):
             
             # Convert to speech
             print("🎤 Converting to speech...")
-            audio_filename = f"narration_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
+            audio_filename = f"narration_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
             result = await session.call_tool("tts", {
                 "text": narration,
                 "output_file": audio_filename

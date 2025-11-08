@@ -43,7 +43,7 @@ def cleanup_old_screenshots():
 
 def cleanup_old_audio():
     """Keep only the last 2 audio files"""
-    audio_files = sorted(SCREENSHOT_DIR.glob("*.mp3"), key=os.path.getmtime)
+    audio_files = sorted(SCREENSHOT_DIR.glob("*.wav"), key=os.path.getmtime)
     while len(audio_files) > 2:
         oldest = audio_files.pop(0)
         oldest.unlink()
@@ -249,7 +249,7 @@ Generate 1-2 sentences of funny, sarcastic narration (like a sports commentator 
     
     elif name == "tts":
         text = arguments["text"]
-        output_file = arguments.get("output_file", "narration.mp3")
+        output_file = arguments.get("output_file", "narration.wav")
         output_path = SCREENSHOT_DIR / output_file
         
         # Cleanup old audio files first
@@ -262,6 +262,7 @@ Generate 1-2 sentences of funny, sarcastic narration (like a sports commentator 
             voice_id="nPczCjzI2devNBz1zQrb",
             text=text,
             model_id="eleven_multilingual_v2",
+            output_format="pcm_44100",  # WAV format, 44.1kHz
             voice_settings=VoiceSettings(
                 stability=0.5,
                 similarity_boost=0.75,
@@ -271,7 +272,7 @@ Generate 1-2 sentences of funny, sarcastic narration (like a sports commentator 
             )
         )
         
-        # Save the audio
+        # Save the audio as WAV
         with open(output_path, "wb") as f:
             for chunk in audio:
                 f.write(chunk)
