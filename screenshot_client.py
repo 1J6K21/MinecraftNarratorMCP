@@ -61,14 +61,18 @@ def play_audio(audio_file: Path):
     if system == "Darwin":  # macOS
         subprocess.run(["afplay", str(audio_file)])
     elif system == "Windows":
-        # Use PowerShell SoundPlayer for WAV (built-in, no window, no dependencies)
-        subprocess.run([
-            "powershell", "-WindowStyle", "Hidden", "-Command",
-            f"(New-Object Media.SoundPlayer '{audio_file.absolute()}').PlaySync()"
-        ], creationflags=subprocess.CREATE_NO_WINDOW)
+        # Use playsound for silent MP3 playback (no window)
+        try:
+            from playsound import playsound
+            playsound(str(audio_file))
+        except ImportError:
+            print("⚠️  playsound not installed. Install with: pip install playsound")
+            print("   Opening default player (may show window)...")
+            os.startfile(str(audio_file))
+            time.sleep(5)
     else:  # Linux
         # Try various Linux audio players
-        for player in ["paplay", "aplay", "ffplay", "mpg123"]:
+        for player in ["paplay", "mpg123", "ffplay", "aplay"]:
             try:
                 subprocess.run([player, str(audio_file)], check=True)
                 break
@@ -126,7 +130,7 @@ async def process_screenshots(include_minecraft=False):
             
             # Convert to speech
             print("🎤 Converting to speech...")
-            audio_filename = f"narration_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav"
+            audio_filename = f"narration_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
             result = await session.call_tool("tts", {
                 "text": narration,
                 "output_file": audio_filename
