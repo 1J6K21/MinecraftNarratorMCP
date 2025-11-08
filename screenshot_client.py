@@ -136,24 +136,48 @@ async def process_screenshots(include_minecraft=False):
             audio_path = SCREENSHOT_DIR / audio_filename
             play_audio(audio_path)
 
+def start_minecraft_receiver():
+    """Start the Minecraft receiver server in background"""
+    python_cmd = "python" if platform.system() == "Windows" else "python3"
+    
+    try:
+        # Check if receiver is already running
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        result = sock.connect_ex(('localhost', 8080))
+        sock.close()
+        
+        if result == 0:
+            print("🎮 Minecraft receiver already running on port 8080")
+            return None
+        
+        # Start receiver in background
+        receiver_process = subprocess.Popen(
+            [python_cmd, "minecraft_receiver.py"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+        time.sleep(1)  # Give it time to start
+        print("🎮 Minecraft receiver started on port 8080")
+        return receiver_process
+    except Exception as e:
+        print(f"⚠️  Could not start Minecraft receiver: {e}")
+        return None
+
 async def main():
     """Main loop: take screenshots and process them"""
     print("🚀 Screenshot Narrator Client Started")
     print(f"📁 Screenshots directory: {SCREENSHOT_DIR}")
     print(f"⏱️  Taking screenshots every {INTERVAL} seconds")
     
-    # Check if Minecraft receiver is available
-    minecraft_data_file = SCREENSHOT_DIR / "minecraft_data.json"
-    include_minecraft = minecraft_data_file.exists()
-    if include_minecraft:
-        print("🎮 Minecraft mod integration: ENABLED")
-        print("   (Start minecraft_receiver.py to receive mod events)")
-    else:
-        print("🎮 Minecraft mod integration: DISABLED")
+    # Start Minecraft receiver automatically
+    receiver_process = start_minecraft_receiver()
     
+    minecraft_data_file = SCREENSHOT_DIR / "minecraft_data.json"
     print("Press Ctrl+C to stop\n")
     
     screenshot_count = 0
+    receiver_process = None
     
     try:
         while True:
@@ -182,6 +206,12 @@ async def main():
             
     except KeyboardInterrupt:
         print("\n\n👋 Stopping screenshot narrator...")
+        
+        # Stop Minecraft receiver if we started it
+        if receiver_process:
+            print("🛑 Stopping Minecraft receiver...")
+            receiver_process.terminate()
+            receiver_process.wait()
 
 if __name__ == "__main__":
     import asyncio

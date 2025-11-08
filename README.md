@@ -13,11 +13,13 @@ A fun MCP server that takes screenshots, describes what changed, generates hilar
 ## Setup
 
 1. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 2. Create a `.env` file with your API keys:
+
 ```bash
 cp .env.example .env
 # Edit .env and add your API keys
@@ -38,6 +40,7 @@ python screenshot_client.py
 ```
 
 This will:
+
 1. Take a screenshot every 5 seconds
 2. After 2 screenshots, compare them
 3. Generate a funny narration about what changed
@@ -47,47 +50,49 @@ This will:
 
 To include Minecraft gameplay events in the narration:
 
-1. Start the Minecraft receiver server:
+1. Install the Minecraft Fabric mod (see `MinecraftMCP.java`)
+2. Run the screenshot client (it automatically starts the receiver):
+
 ```bash
-python minecraft_receiver.py
+python screenshot_client.py
 ```
 
-2. Install the Minecraft Fabric mod (see `MinecraftMCP.java`)
-3. Run Minecraft - the mod will send events to the receiver
-4. Run the screenshot client - it will automatically detect and include Minecraft data
+3. Launch Minecraft - the mod will send events automatically
 
 The narrator will describe both what's happening on screen AND in-game events like:
+
 - Blocks placed/broken
 - Damage taken
 - Biome changes
 - Day/night cycle
 
+**Note:** The Minecraft receiver runs automatically in the background. No need to start it separately!
+
 ┌─────────────────┐
-│ Minecraft Mod   │ (Java)
-│ (in game)       │
+│ Minecraft Mod │ (Java)
+│ (in game) │
 └────────┬────────┘
-         │ HTTP POST
-         ▼
+│ HTTP POST
+▼
 ┌─────────────────────┐
-│ minecraft_receiver  │ (Flask HTTP server)
-│ Port 8080           │ Saves to minecraft_data.json
+│ minecraft_receiver │ (Flask HTTP server)
+│ Port 8080 │ Saves to minecraft_data.json
 └────────┬────────────┘
-         │ File write
-         ▼
+│ File write
+▼
 ┌─────────────────────┐
 │ minecraft_data.json │ (Shared file)
 └────────┬────────────┘
-         │ File read
-         ▼
+│ File read
+▼
 ┌─────────────────────┐
-│ screenshot_client   │ Reads file, calls MCP tool
+│ screenshot_client │ Reads file, calls MCP tool
 └────────┬────────────┘
-         │ MCP call
-         ▼
+│ MCP call
+▼
 ┌─────────────────────┐
-│ mcp_server.py       │ Processes data via get_minecraft_input tool
+│ mcp_server.py │ Processes data via get_minecraft_input tool
 └─────────────────────┘
-
 
 ### Use as MCP Server
 
@@ -128,12 +133,12 @@ You can also use this as an MCP server in Kiro or other MCP clients:
 ==================================================
 📋 Getting screenshots...
 🔍 Describing changes...
-Description: The user has switched from their code editor to a web browser, 
+Description: The user has switched from their code editor to a web browser,
 apparently giving up on debugging to search Stack Overflow instead.
 
 🎭 Generating funny narration...
-Narration: And here we observe the developer in their natural habitat, 
-abandoning all hope of solving the problem themselves and turning to the 
+Narration: And here we observe the developer in their natural habitat,
+abandoning all hope of solving the problem themselves and turning to the
 ancient wisdom of strangers on the internet. Truly magnificent.
 
 🎤 Converting to speech...
@@ -149,6 +154,7 @@ ancient wisdom of strangers on the internet. Truly magnificent.
 - Press Ctrl+C to stop the client
 
 ### Platform-specific details:
+
 - **macOS**: Uses native `screencapture` and `afplay` commands
 - **Windows**: Uses PIL for screenshots and pygame for audio
 - **Linux**: Uses `scrot`/`gnome-screenshot` for screenshots, various audio players
