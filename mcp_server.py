@@ -117,6 +117,25 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
+            name="describe_for_narration",
+            description="Combined tool: analyzes screenshots/Minecraft data and generates narration in one step (faster)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "image_count": {
+                        "type": "number",
+                        "description": "Number of images to analyze (0, 1, or 2)",
+                        "default": 2
+                    },
+                    "include_minecraft": {
+                        "type": "boolean",
+                        "description": "Include Minecraft mod data in narration",
+                        "default": False
+                    }
+                },
+            }
+        ),
+        Tool(
             name="tts",
             description="Converts narration text to audio file with a funny voice and returns mp3",
             inputSchema={
@@ -244,6 +263,68 @@ Connect the visual with the gameplay."""
 Generate 1-2 sentences of funny, sarcastic narration (like a sports commentator or David Attenborough). Be brief and entertaining. Be insulting, personal, and dont hold back comments, dark humor encouraged. Make sure to overly use words like dumbass, refere to the subject as 'this fucker' and for other words use this word bank: [birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile]"""
         
         response = gemini_model.generate_content(prompt)
+        narration = response.text
+        return [TextContent(type="text", text=narration)]
+    
+    elif name == "describe_for_narration":
+        image_count = arguments.get("image_count", 2)
+        include_minecraft = arguments.get("include_minecraft", False)
+        
+        # Get screenshots if requested
+        screenshots = []
+        if image_count > 0:
+            screenshots = get_last_screenshots(image_count)
+        
+        # Get Minecraft data if requested
+        minecraft_context = ""
+        if include_minecraft and last_minecraft_data:
+            minecraft_context = f"\n\nMinecraft events: {json.dumps(last_minecraft_data)}"
+        
+        # Validate at least one input
+        if not screenshots and not minecraft_context:
+            return [TextContent(type="text", text="No data available. Need screenshots or Minecraft data.")]
+        
+        # Build combined prompt for Gemini (describe + narrate in one call)
+        content = []
+        
+        if len(screenshots) == 2 and minecraft_context:
+            # Both screenshots and Minecraft data
+            prompt = f"""Look at these two screenshots (first is older, second is newer) and these Minecraft events: {minecraft_context}
+
+Generate 1-2 sentences of funny, sarcastic narration about what's happening. Be a sports commentator or David Attenborough narrating this person's mundane activities. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile."""
+            content.append(prompt)
+            images = [Image.open(img) for img in reversed(screenshots)]
+            content.extend(images)
+        elif len(screenshots) == 2:
+            # Only screenshots
+            prompt = """Look at these two screenshots (first is older, second is newer).
+
+Generate 1-2 sentences of funny, sarcastic narration about what changed. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile."""
+            content.append(prompt)
+            images = [Image.open(img) for img in reversed(screenshots)]
+            content.extend(images)
+        elif len(screenshots) == 1 and minecraft_context:
+            # Single screenshot with Minecraft data
+            prompt = f"""Look at this screenshot and these Minecraft events: {minecraft_context}
+
+Generate 1-2 sentences of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile."""
+            content.append(prompt)
+            content.append(Image.open(screenshots[0]))
+        elif len(screenshots) == 1:
+            # Only single screenshot
+            prompt = """Look at this screenshot.
+
+Generate 1-2 sentences of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile."""
+            content.append(prompt)
+            content.append(Image.open(screenshots[0]))
+        else:
+            # Only Minecraft data
+            prompt = f"""Based on these Minecraft events: {minecraft_context}
+
+Generate 1-2 sentences of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile."""
+            content.append(prompt)
+        
+        response = gemini_model.generate_content(content)
         narration = response.text
         return [TextContent(type="text", text=narration)]
     

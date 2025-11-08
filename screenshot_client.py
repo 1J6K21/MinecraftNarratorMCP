@@ -69,15 +69,24 @@ def play_audio(audio_file: Path):
     if system == "Darwin":  # macOS
         subprocess.run(["afplay", str(audio_file)])
     elif system == "Windows":
-        # Use playsound for silent MP3 playback (no window)
+        # Use Windows Media Player command line (hidden, synchronous)
         try:
-            from playsound import playsound
-            playsound(str(audio_file))
-        except ImportError:
-            print("⚠️  playsound not installed. Install with: pip install playsound")
-            print("   Opening default player (may show window)...")
-            os.startfile(str(audio_file))
-            time.sleep(5)
+            # Use PowerShell to play MP3 with Windows Media Player (no window)
+            subprocess.run([
+                "powershell", "-WindowStyle", "Hidden", "-Command",
+                f"Add-Type -AssemblyName presentationCore; "
+                f"$mediaPlayer = New-Object System.Windows.Media.MediaPlayer; "
+                f"$mediaPlayer.Open('{audio_file.absolute()}'); "
+                f"$mediaPlayer.Play(); "
+                f"Start-Sleep -Seconds ([int]($mediaPlayer.NaturalDuration.TimeSpan.TotalSeconds + 1))"
+            ], check=True, creationflags=subprocess.CREATE_NO_WINDOW)
+        except:
+            # Fallback: use playsound
+            try:
+                from playsound import playsound
+                playsound(str(audio_file), block=True)
+            except:
+                print("⚠️  Could not play audio silently")
     else:  # Linux
         # Try various Linux audio players
         for player in ["paplay", "mpg123", "ffplay", "aplay"]:
@@ -117,15 +126,11 @@ async def generate_narration(include_minecraft=False):
                         "minecraft_data": minecraft_data
                     })
                 
-                # Describe changes
-                result = await session.call_tool("describe", {
+                # Use combined describe_for_narration tool (faster - one API call)
+                result = await session.call_tool("describe_for_narration", {
                     "image_count": 2,
                     "include_minecraft": include_minecraft
                 })
-                description = result.content[0].text
-                
-                # Generate narration
-                result = await session.call_tool("narrate", {"description": description})
                 narration = result.content[0].text
                 
                 # Add to queue
