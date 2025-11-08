@@ -24,19 +24,19 @@ minecraft_events = []
 
 @app.route('/mcp', methods=['POST'])
 def receive_minecraft_event():
-    """Receive Minecraft mod events"""
+    """Receive Minecraft mod events in format: event_type, event_source"""
     try:
         data = request.json
         
-        # Extract event data
-        tool_name = data.get('tool_name')
-        parameters = data.get('parameters', {})
+        # Extract event data - new format: event_type and event_source
+        event_type = data.get('event_type', data.get('tool_name', 'unknown'))
+        event_source = data.get('event_source', data.get('parameters', {}).get('blockName', 'unknown'))
         
         # Create event record
         event = {
             'timestamp': datetime.now().isoformat(),
-            'tool_name': tool_name,
-            'parameters': parameters
+            'event_type': event_type,
+            'event_source': event_source
         }
         
         # Add to events list (keep last 10)
@@ -48,7 +48,7 @@ def receive_minecraft_event():
         with open(MINECRAFT_DATA_FILE, 'w') as f:
             json.dump(minecraft_events, f, indent=2)
         
-        print(f"📦 Minecraft event: {tool_name} - {parameters}")
+        print(f"📦 Minecraft event: {event_type} - {event_source}")
         
         return jsonify({
             "status": "success",
