@@ -241,7 +241,7 @@ Connect the visual with the gameplay."""
         
         prompt = f"""Based on this: {description}
 
-Generate 1-2 sentences of funny, sarcastic narration (like a sports commentator or David Attenborough). Be brief and entertaining. Be insulting, personal, and dont hold back comments, dark humor encouraged."""
+Generate 1-2 sentences of funny, sarcastic narration (like a sports commentator or David Attenborough). Be brief and entertaining. Be insulting, personal, and dont hold back comments, dark humor encouraged. Make sure to overly use words like dumbass, refere to the subject as 'this fucker' and for other words use this word bank: [birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile]"""
         
         response = gemini_model.generate_content(prompt)
         narration = response.text
