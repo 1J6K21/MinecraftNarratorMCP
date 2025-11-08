@@ -62,6 +62,33 @@ The narrator will describe both what's happening on screen AND in-game events li
 - Biome changes
 - Day/night cycle
 
+┌─────────────────┐
+│ Minecraft Mod   │ (Java)
+│ (in game)       │
+└────────┬────────┘
+         │ HTTP POST
+         ▼
+┌─────────────────────┐
+│ minecraft_receiver  │ (Flask HTTP server)
+│ Port 8080           │ Saves to minecraft_data.json
+└────────┬────────────┘
+         │ File write
+         ▼
+┌─────────────────────┐
+│ minecraft_data.json │ (Shared file)
+└────────┬────────────┘
+         │ File read
+         ▼
+┌─────────────────────┐
+│ screenshot_client   │ Reads file, calls MCP tool
+└────────┬────────────┘
+         │ MCP call
+         ▼
+┌─────────────────────┐
+│ mcp_server.py       │ Processes data via get_minecraft_input tool
+└─────────────────────┘
+
+
 ### Use as MCP Server
 
 You can also use this as an MCP server in Kiro or other MCP clients:
