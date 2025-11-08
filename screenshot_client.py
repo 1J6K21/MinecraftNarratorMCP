@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Screenshot Client
-Takes screenshots every 5 seconds and uses MCP to generate narrated audio
+Takes screenshots every 10 seconds and uses MCP to generate narrated audio
+Processes descriptions in background while audio plays
 """
 
 import os
@@ -9,6 +10,8 @@ import sys
 import time
 import subprocess
 import platform
+import asyncio
+import threading
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
@@ -20,7 +23,12 @@ load_dotenv()
 
 SCREENSHOT_DIR = Path(os.getenv("SCREENSHOT_DIR", "./screenshots"))
 SCREENSHOT_DIR.mkdir(exist_ok=True)
-INTERVAL = 5  # seconds
+INTERVAL = 10  # seconds
+
+# Global state for batching narrations
+narration_queue = []
+is_playing_audio = False
+queue_lock = threading.Lock()
 
 def take_screenshot():
     """Take a screenshot and save to directory (cross-platform)"""
@@ -79,9 +87,8 @@ def play_audio(audio_file: Path):
             except FileNotFoundError:
                 continue
 
-async def process_screenshots(include_minecraft=False):
-    """Use MCP to process screenshots and generate narration"""
-    # Use appropriate Python command based on platform
+async def generate_narration(include_minecraft=False):
+    """Generate narration for current screenshots (runs in background)"""
     python_cmd = "python" if platform.system() == "Windows" else "python3"
     
     server_params = StdioServerParameters(
@@ -93,53 +100,98 @@ async def process_screenshots(include_minecraft=False):
         }
     )
     
-    async with stdio_client(server_params) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            
-            # Get screenshots
-            print("📋 Getting screenshots...")
-            result = await session.call_tool("get_screenshot", {})
-            print(result.content[0].text)
-            
-            # Check for Minecraft data
-            minecraft_data_file = SCREENSHOT_DIR / "minecraft_data.json"
-            if include_minecraft and minecraft_data_file.exists():
-                print("🎮 Loading Minecraft data...")
-                with open(minecraft_data_file, 'r') as f:
-                    minecraft_data = f.read()
-                result = await session.call_tool("get_minecraft_input", {
-                    "minecraft_data": minecraft_data
+    try:
+        async with stdio_client(server_params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                
+                # Get screenshots
+                result = await session.call_tool("get_screenshot", {})
+                
+                # Check for Minecraft data
+                minecraft_data_file = SCREENSHOT_DIR / "minecraft_data.json"
+                if include_minecraft and minecraft_data_file.exists():
+                    with open(minecraft_data_file, 'r') as f:
+                        minecraft_data = f.read()
+                    await session.call_tool("get_minecraft_input", {
+                        "minecraft_data": minecraft_data
+                    })
+                
+                # Describe changes
+                result = await session.call_tool("describe", {
+                    "image_count": 2,
+                    "include_minecraft": include_minecraft
                 })
-                print(result.content[0].text)
-            
-            # Describe changes
-            print("🔍 Describing changes...")
-            result = await session.call_tool("describe", {
-                "image_count": 2,
-                "include_minecraft": include_minecraft
-            })
-            description = result.content[0].text
-            print(f"Description: {description}")
-            
-            # Generate narration
-            print("🎭 Generating funny narration...")
-            result = await session.call_tool("narrate", {"description": description})
-            narration = result.content[0].text
-            print(f"Narration: {narration}")
-            
-            # Convert to speech
-            print("🎤 Converting to speech...")
-            audio_filename = f"narration_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
-            result = await session.call_tool("tts", {
-                "text": narration,
-                "output_file": audio_filename
-            })
-            print(result.content[0].text)
-            
-            # Play the audio
-            audio_path = SCREENSHOT_DIR / audio_filename
-            play_audio(audio_path)
+                description = result.content[0].text
+                
+                # Generate narration
+                result = await session.call_tool("narrate", {"description": description})
+                narration = result.content[0].text
+                
+                # Add to queue
+                with queue_lock:
+                    narration_queue.append(narration)
+                    print(f"📝 Narration queued ({len(narration_queue)} in queue): {narration[:50]}...")
+                
+    except Exception as e:
+        print(f"❌ Error generating narration: {e}")
+
+async def process_audio_queue():
+    """Process queued narrations and play audio"""
+    global is_playing_audio
+    
+    while True:
+        # Wait if no narrations queued
+        if not narration_queue:
+            await asyncio.sleep(1)
+            continue
+        
+        # Get all queued narrations
+        with queue_lock:
+            if not narration_queue:
+                continue
+            batch_narrations = narration_queue.copy()
+            narration_queue.clear()
+        
+        # Combine narrations
+        combined_text = " ... ".join(batch_narrations)
+        print(f"\n{'='*50}")
+        print(f"🎤 Converting {len(batch_narrations)} narration(s) to speech...")
+        print(f"{'='*50}")
+        
+        # Generate audio
+        is_playing_audio = True
+        python_cmd = "python" if platform.system() == "Windows" else "python3"
+        
+        server_params = StdioServerParameters(
+            command=python_cmd,
+            args=["mcp_server.py"],
+            env={
+                **os.environ,
+                "SCREENSHOT_DIR": str(SCREENSHOT_DIR),
+            }
+        )
+        
+        try:
+            async with stdio_client(server_params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    
+                    audio_filename = f"narration_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
+                    result = await session.call_tool("tts", {
+                        "text": combined_text,
+                        "output_file": audio_filename
+                    })
+                    
+                    # Play audio in separate thread to not block
+                    audio_path = SCREENSHOT_DIR / audio_filename
+                    await asyncio.to_thread(play_audio, audio_path)
+                    
+        except Exception as e:
+            print(f"❌ Error processing audio: {e}")
+        finally:
+            is_playing_audio = False
+            print(f"{'='*50}\n")
 
 def start_minecraft_receiver():
     """Start the Minecraft receiver server in background"""
@@ -169,20 +221,10 @@ def start_minecraft_receiver():
         print(f"⚠️  Could not start Minecraft receiver: {e}")
         return None
 
-async def main():
-    """Main loop: take screenshots and process them"""
-    print("🚀 Screenshot Narrator Client Started")
-    print(f"📁 Screenshots directory: {SCREENSHOT_DIR}")
-    print(f"⏱️  Taking screenshots every {INTERVAL} seconds")
-    
-    # Start Minecraft receiver automatically
-    receiver_process = start_minecraft_receiver()
-    
+async def screenshot_loop(receiver_process):
+    """Main loop: take screenshots and generate narrations in background"""
     minecraft_data_file = SCREENSHOT_DIR / "minecraft_data.json"
-    print("Press Ctrl+C to stop\n")
-    
     screenshot_count = 0
-    receiver_process = None
     
     try:
         while True:
@@ -195,19 +237,11 @@ async def main():
             
             # Process every 2 screenshots (so we have before/after)
             if screenshot_count >= 2:
-                print("\n" + "="*50)
-                print("🎬 Processing screenshots...")
-                print("="*50)
-                
-                try:
-                    await process_screenshots(include_minecraft=include_minecraft)
-                except Exception as e:
-                    print(f"❌ Error processing: {e}")
-                
-                print("\n" + "="*50 + "\n")
+                # Generate narration in background (doesn't block)
+                asyncio.create_task(generate_narration(include_minecraft=include_minecraft))
             
             # Wait for next screenshot
-            time.sleep(INTERVAL)
+            await asyncio.sleep(INTERVAL)
             
     except KeyboardInterrupt:
         print("\n\n👋 Stopping screenshot narrator...")
@@ -217,6 +251,24 @@ async def main():
             print("🛑 Stopping Minecraft receiver...")
             receiver_process.terminate()
             receiver_process.wait()
+
+async def main():
+    """Main entry point"""
+    print("🚀 Screenshot Narrator Client Started")
+    print(f"📁 Screenshots directory: {SCREENSHOT_DIR}")
+    print(f"⏱️  Taking screenshots every {INTERVAL} seconds")
+    print("📝 Narrations are queued and batched while audio plays")
+    
+    # Start Minecraft receiver automatically
+    receiver_process = start_minecraft_receiver()
+    
+    print("Press Ctrl+C to stop\n")
+    
+    # Run both loops concurrently
+    await asyncio.gather(
+        screenshot_loop(receiver_process),
+        process_audio_queue()
+    )
 
 if __name__ == "__main__":
     import asyncio

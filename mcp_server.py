@@ -258,24 +258,36 @@ Generate 1-2 sentences of funny, sarcastic narration (like a sports commentator 
         # Use ElevenLabs TTS with custom voice ID and settings
         from elevenlabs import VoiceSettings
         
-        audio = elevenlabs_client.text_to_speech.convert(
-            voice_id="nPczCjzI2devNBz1zQrb",
-            text=text,
-            model_id="eleven_multilingual_v2",
-            output_format="mp3_44100_128",  # MP3 format (free tier)
-            voice_settings=VoiceSettings(
-                stability=0.5,
-                similarity_boost=0.75,
-                style=0.10,  # 10% style exaggeration
-                use_speaker_boost=True,
-                speed=1.15  # 15% faster
+        try:
+            audio = elevenlabs_client.text_to_speech.convert(
+                voice_id="nPczCjzI2devNBz1zQrb",
+                text=text,
+                model_id="eleven_multilingual_v2",
+                voice_settings=VoiceSettings(
+                    stability=0.5,
+                    similarity_boost=0.75,
+                    style=0.10,  # 10% style exaggeration
+                    use_speaker_boost=True
+                )
             )
-        )
-        
-        # Save the audio as MP3
-        with open(output_path, "wb") as f:
-            for chunk in audio:
-                f.write(chunk)
+            
+            # Save the audio as MP3
+            with open(output_path, "wb") as f:
+                for chunk in audio:
+                    f.write(chunk)
+                    
+        except Exception as e:
+            # Fallback to macOS 'say' command if ElevenLabs fails (quota/credits)
+            print(f"⚠️  ElevenLabs error: {e}")
+            print("🔄 Falling back to macOS 'say' command...")
+            output_path = output_path.with_suffix('.aiff')
+            subprocess.run([
+                "say",
+                "-v", "Daniel",
+                "-o", str(output_path),
+                text
+            ])
+            return [TextContent(type="text", text=f"Audio saved (fallback): {output_path}")]
         
         return [TextContent(type="text", text=f"Audio saved to: {output_path}")]
     
