@@ -5,14 +5,16 @@ Takes screenshots every 5 seconds and uses MCP to generate narrated audio
 """
 
 import os
+import sys
 import time
 import subprocess
+import platform
 from pathlib import Path
 from datetime import datetime
-import requests
 from dotenv import load_dotenv
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from PIL import ImageGrab
 
 load_dotenv()
 
@@ -21,25 +23,64 @@ SCREENSHOT_DIR.mkdir(exist_ok=True)
 INTERVAL = 5  # seconds
 
 def take_screenshot():
-    """Take a screenshot and save to directory"""
+    """Take a screenshot and save to directory (cross-platform)"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = SCREENSHOT_DIR / f"screenshot_{timestamp}.png"
     
-    # macOS screenshot command
-    subprocess.run(["screencapture", "-x", str(filename)], check=True)
+    system = platform.system()
+    
+    if system == "Darwin":  # macOS
+        subprocess.run(["screencapture", "-x", str(filename)], check=True)
+    elif system == "Windows":
+        # Use PIL ImageGrab for Windows
+        screenshot = ImageGrab.grab()
+        screenshot.save(filename)
+    else:  # Linux
+        # Try using scrot or gnome-screenshot
+        try:
+            subprocess.run(["scrot", str(filename)], check=True)
+        except FileNotFoundError:
+            try:
+                subprocess.run(["gnome-screenshot", "-f", str(filename)], check=True)
+            except FileNotFoundError:
+                # Fallback to PIL
+                screenshot = ImageGrab.grab()
+                screenshot.save(filename)
+    
     print(f"📸 Screenshot saved: {filename}")
     return filename
 
 def play_audio(audio_file: Path):
-    """Play audio file using macOS afplay"""
-    if audio_file.exists():
-        print(f"🔊 Playing audio: {audio_file}")
+    """Play audio file (cross-platform)"""
+    if not audio_file.exists():
+        return
+    
+    print(f"🔊 Playing audio: {audio_file}")
+    system = platform.system()
+    
+    if system == "Darwin":  # macOS
         subprocess.run(["afplay", str(audio_file)])
+    elif system == "Windows":
+        # Use Windows' built-in start command (opens default media player)
+        os.startfile(str(audio_file))
+        # Wait a bit for it to finish (estimate based on file size)
+        time.sleep(5)  # Adjust if needed
+    else:  # Linux
+        # Try various Linux audio players
+        for player in ["aplay", "paplay", "ffplay", "mpg123"]:
+            try:
+                subprocess.run([player, str(audio_file)], check=True)
+                break
+            except FileNotFoundError:
+                continue
 
 async def process_screenshots():
     """Use MCP to process screenshots and generate narration"""
+    # Use appropriate Python command based on platform
+    python_cmd = "python" if platform.system() == "Windows" else "python3"
+    
     server_params = StdioServerParameters(
-        command="python3",
+        command=python_cmd,
         args=["mcp_server.py"],
         env={
             **os.environ,

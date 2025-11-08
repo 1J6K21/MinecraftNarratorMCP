@@ -96,12 +96,16 @@ ancient wisdom of strangers on the internet. Truly magnificent.
 
 ## Notes
 
-- Requires macOS for `screencapture` and `afplay` commands
-- For other OS, replace with platform-specific screenshot/audio tools
+- **Cross-platform**: Works on macOS, Windows, and Linux
 - Costs: Gemini is FREE + ElevenLabs has 10k chars/month free tier
-- Gemini 1.5 Flash is super fast for vision tasks
+- Gemini 2.5 Flash is super fast for vision tasks
 - ElevenLabs voices are incredibly realistic and expressive
 - Press Ctrl+C to stop the client
+
+### Platform-specific details:
+- **macOS**: Uses native `screencapture` and `afplay` commands
+- **Windows**: Uses PIL for screenshots and pygame for audio
+- **Linux**: Uses `scrot`/`gnome-screenshot` for screenshots, various audio players
 
 ## Customization
 
