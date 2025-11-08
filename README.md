@@ -43,6 +43,25 @@ This will:
 3. Generate a funny narration about what changed
 4. Convert to speech and play it automatically
 
+### Minecraft Mod Integration (Optional)
+
+To include Minecraft gameplay events in the narration:
+
+1. Start the Minecraft receiver server:
+```bash
+python minecraft_receiver.py
+```
+
+2. Install the Minecraft Fabric mod (see `MinecraftMCP.java`)
+3. Run Minecraft - the mod will send events to the receiver
+4. Run the screenshot client - it will automatically detect and include Minecraft data
+
+The narrator will describe both what's happening on screen AND in-game events like:
+- Blocks placed/broken
+- Damage taken
+- Biome changes
+- Day/night cycle
+
 ### Use as MCP Server
 
 You can also use this as an MCP server in Kiro or other MCP clients:

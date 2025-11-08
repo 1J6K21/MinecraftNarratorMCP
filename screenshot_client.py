@@ -74,7 +74,7 @@ def play_audio(audio_file: Path):
             except FileNotFoundError:
                 continue
 
-async def process_screenshots():
+async def process_screenshots(include_minecraft=False):
     """Use MCP to process screenshots and generate narration"""
     # Use appropriate Python command based on platform
     python_cmd = "python" if platform.system() == "Windows" else "python3"
@@ -97,9 +97,23 @@ async def process_screenshots():
             result = await session.call_tool("get_screenshot", {})
             print(result.content[0].text)
             
+            # Check for Minecraft data
+            minecraft_data_file = SCREENSHOT_DIR / "minecraft_data.json"
+            if include_minecraft and minecraft_data_file.exists():
+                print("🎮 Loading Minecraft data...")
+                with open(minecraft_data_file, 'r') as f:
+                    minecraft_data = f.read()
+                result = await session.call_tool("get_minecraft_input", {
+                    "minecraft_data": minecraft_data
+                })
+                print(result.content[0].text)
+            
             # Describe changes
             print("🔍 Describing changes...")
-            result = await session.call_tool("describe", {"image_count": 2})
+            result = await session.call_tool("describe", {
+                "image_count": 2,
+                "include_minecraft": include_minecraft
+            })
             description = result.content[0].text
             print(f"Description: {description}")
             
@@ -127,6 +141,16 @@ async def main():
     print("🚀 Screenshot Narrator Client Started")
     print(f"📁 Screenshots directory: {SCREENSHOT_DIR}")
     print(f"⏱️  Taking screenshots every {INTERVAL} seconds")
+    
+    # Check if Minecraft receiver is available
+    minecraft_data_file = SCREENSHOT_DIR / "minecraft_data.json"
+    include_minecraft = minecraft_data_file.exists()
+    if include_minecraft:
+        print("🎮 Minecraft mod integration: ENABLED")
+        print("   (Start minecraft_receiver.py to receive mod events)")
+    else:
+        print("🎮 Minecraft mod integration: DISABLED")
+    
     print("Press Ctrl+C to stop\n")
     
     screenshot_count = 0
@@ -137,6 +161,9 @@ async def main():
             take_screenshot()
             screenshot_count += 1
             
+            # Check if Minecraft data exists
+            include_minecraft = minecraft_data_file.exists()
+            
             # Process every 2 screenshots (so we have before/after)
             if screenshot_count >= 2:
                 print("\n" + "="*50)
@@ -144,7 +171,7 @@ async def main():
                 print("="*50)
                 
                 try:
-                    await process_screenshots()
+                    await process_screenshots(include_minecraft=include_minecraft)
                 except Exception as e:
                     print(f"❌ Error processing: {e}")
                 

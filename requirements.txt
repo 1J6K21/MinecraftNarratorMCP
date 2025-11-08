@@ -3,3 +3,4 @@ elevenlabs>=1.0.0
 mcp>=1.0.0
 python-dotenv>=1.0.0
 Pillow>=10.0.0
+flask>=3.0.0

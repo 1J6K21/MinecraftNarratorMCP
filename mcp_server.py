@@ -7,6 +7,7 @@ Takes screenshots, describes changes, generates funny narration, and converts to
 import os
 import glob
 import base64
+import json
 from pathlib import Path
 from typing import Optional
 import google.generativeai as genai
@@ -26,6 +27,10 @@ elevenlabs_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
 SCREENSHOT_DIR = Path(os.getenv("SCREENSHOT_DIR", "./screenshots"))
 SCREENSHOT_DIR.mkdir(exist_ok=True)
 MAX_SCREENSHOTS = 5
+
+# Minecraft mod data storage
+MINECRAFT_DATA_FILE = SCREENSHOT_DIR / "minecraft_data.json"
+last_minecraft_data = None
 
 app = Server("screenshot-narrator")
 
@@ -65,15 +70,34 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
+            name="get_minecraft_input",
+            description="Get Minecraft mod input data (damage, blocks placed/broken, biome, day/night cycle)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "minecraft_data": {
+                        "type": "string",
+                        "description": "JSON string containing Minecraft events"
+                    }
+                },
+                "required": ["minecraft_data"]
+            }
+        ),
+        Tool(
             name="describe",
-            description="Describes what's in a screenshot. If 2 images are given, describes the changes between them",
+            description="Describes changes from screenshots and/or Minecraft mod data. At least one input required.",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "image_count": {
                         "type": "number",
-                        "description": "Number of images to analyze (1 or 2)",
+                        "description": "Number of images to analyze (0, 1, or 2)",
                         "default": 2
+                    },
+                    "include_minecraft": {
+                        "type": "boolean",
+                        "description": "Include Minecraft mod data in description",
+                        "default": False
                     }
                 },
             }
@@ -128,23 +152,66 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent | ImageConte
         
         return result
     
+    elif name == "get_minecraft_input":
+        global last_minecraft_data
+        minecraft_data_str = arguments.get("minecraft_data", "{}")
+        
+        try:
+            current_data = json.loads(minecraft_data_str)
+            
+            # Save current data
+            with open(MINECRAFT_DATA_FILE, 'w') as f:
+                json.dump(current_data, f)
+            
+            # Calculate diff if we have previous data
+            diff_info = ""
+            if last_minecraft_data:
+                diff_info = f"\nPrevious: {json.dumps(last_minecraft_data)}\nCurrent: {json.dumps(current_data)}"
+            else:
+                diff_info = f"\nFirst data: {json.dumps(current_data)}"
+            
+            last_minecraft_data = current_data
+            
+            return [TextContent(type="text", text=f"Minecraft data received{diff_info}")]
+        except json.JSONDecodeError:
+            return [TextContent(type="text", text="Invalid JSON data")]
+    
     elif name == "describe":
         image_count = arguments.get("image_count", 2)
-        screenshots = get_last_screenshots(image_count)
+        include_minecraft = arguments.get("include_minecraft", False)
         
-        if not screenshots:
-            return [TextContent(type="text", text="No screenshots available")]
+        # Get screenshots if requested
+        screenshots = []
+        if image_count > 0:
+            screenshots = get_last_screenshots(image_count)
+        
+        # Get Minecraft data if requested
+        minecraft_context = ""
+        if include_minecraft and last_minecraft_data:
+            minecraft_context = f"\n\nMinecraft events: {json.dumps(last_minecraft_data)}"
+        
+        # Validate at least one input
+        if not screenshots and not minecraft_context:
+            return [TextContent(type="text", text="No data available. Need screenshots or Minecraft data.")]
         
         # Build prompt for Gemini
-        if len(screenshots) == 2:
-            prompt = "In 1-2 sentences, describe what changed between these screenshots (first is older, second is newer)."
-            images = [Image.open(img) for img in reversed(screenshots)]
-            response = gemini_model.generate_content([prompt] + images)
-        else:
-            prompt = "In 1-2 sentences, describe what's happening in this screenshot."
-            image = Image.open(screenshots[0])
-            response = gemini_model.generate_content([prompt, image])
+        content = []
         
+        if len(screenshots) == 2:
+            prompt = f"In 1-2 sentences, describe what changed between these screenshots (first is older, second is newer).{minecraft_context}"
+            content.append(prompt)
+            images = [Image.open(img) for img in reversed(screenshots)]
+            content.extend(images)
+        elif len(screenshots) == 1:
+            prompt = f"In 1-2 sentences, describe what's happening in this screenshot.{minecraft_context}"
+            content.append(prompt)
+            content.append(Image.open(screenshots[0]))
+        else:
+            # Only Minecraft data
+            prompt = f"In 1-2 sentences, describe these Minecraft events:{minecraft_context}"
+            content.append(prompt)
+        
+        response = gemini_model.generate_content(content)
         description = response.text
         return [TextContent(type="text", text=description)]
     
