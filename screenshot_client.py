@@ -133,7 +133,7 @@ async def generate_narration(include_minecraft=False):
                 })
                 narration = result.content[0].text
                 
-                # Add to queue
+                # Add to queue (no limit - will be summarized)
                 with queue_lock:
                     narration_queue.append(narration)
                     print(f"📝 Narration queued ({len(narration_queue)} in queue): {narration[:50]}...")
@@ -151,17 +151,15 @@ async def process_audio_queue():
             await asyncio.sleep(1)
             continue
         
-        # Get all queued narrations
+        # Get ALL queued narrations
         with queue_lock:
             if not narration_queue:
                 continue
             batch_narrations = narration_queue.copy()
             narration_queue.clear()
         
-        # Combine narrations
-        combined_text = " ... ".join(batch_narrations)
         print(f"\n{'='*50}")
-        print(f"🎤 Converting {len(batch_narrations)} narration(s) to speech...")
+        print(f"🎤 Summarizing {len(batch_narrations)} narration(s) into one sentence...")
         print(f"{'='*50}")
         
         # Generate audio
@@ -182,9 +180,16 @@ async def process_audio_queue():
                 async with ClientSession(read, write) as session:
                     await session.initialize()
                     
+                    # Use summarize_narrations tool to condense all into one sentence
+                    result = await session.call_tool("summarize_narrations", {
+                        "narrations": batch_narrations
+                    })
+                    summarized_text = result.content[0].text
+                    print(f"📝 Summary: {summarized_text}")
+                    
                     audio_filename = f"narration_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
                     result = await session.call_tool("tts", {
-                        "text": combined_text,
+                        "text": summarized_text,
                         "output_file": audio_filename
                     })
                     

@@ -136,6 +136,21 @@ async def list_tools() -> list[Tool]:
             }
         ),
         Tool(
+            name="summarize_narrations",
+            description="Takes multiple narrations and summarizes them into ONE concise sentence with key information",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "narrations": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of narration sentences to summarize"
+                    }
+                },
+                "required": ["narrations"]
+            }
+        ),
+        Tool(
             name="tts",
             description="Converts narration text to audio file with a funny voice and returns mp3",
             inputSchema={
@@ -289,17 +304,17 @@ Generate 1-2 sentences of funny, sarcastic narration (like a sports commentator 
         
         if len(screenshots) == 2 and minecraft_context:
             # Both screenshots and Minecraft data
-            prompt = f"""Look at these two screenshots (first is older, second is newer) and these Minecraft events: {minecraft_context}
+            prompt = f"""Look at these two screenshots (FIRST is older, SECOND is MOST RECENT) and these Minecraft events: {minecraft_context}
 
-Generate 1-2 sentences of funny, sarcastic narration about what's happening. Be a sports commentator or David Attenborough narrating this person's mundane activities. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile."""
+Focus on what's happening in the SECOND (newest) screenshot. Generate ONE SHORT sentence of funny, sarcastic narration about the CURRENT activity. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY."""
             content.append(prompt)
             images = [Image.open(img) for img in reversed(screenshots)]
             content.extend(images)
         elif len(screenshots) == 2:
             # Only screenshots
-            prompt = """Look at these two screenshots (first is older, second is newer).
+            prompt = """Look at these two screenshots (FIRST is older, SECOND is MOST RECENT).
 
-Generate 1-2 sentences of funny, sarcastic narration about what changed. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile."""
+Focus on what's happening in the SECOND (newest) screenshot. Generate ONE SHORT sentence of funny, sarcastic narration about the CURRENT activity. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY."""
             content.append(prompt)
             images = [Image.open(img) for img in reversed(screenshots)]
             content.extend(images)
@@ -307,26 +322,48 @@ Generate 1-2 sentences of funny, sarcastic narration about what changed. Be a sp
             # Single screenshot with Minecraft data
             prompt = f"""Look at this screenshot and these Minecraft events: {minecraft_context}
 
-Generate 1-2 sentences of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile."""
+Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY."""
             content.append(prompt)
             content.append(Image.open(screenshots[0]))
         elif len(screenshots) == 1:
             # Only single screenshot
             prompt = """Look at this screenshot.
 
-Generate 1-2 sentences of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile."""
+Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY."""
             content.append(prompt)
             content.append(Image.open(screenshots[0]))
         else:
             # Only Minecraft data
             prompt = f"""Based on these Minecraft events: {minecraft_context}
 
-Generate 1-2 sentences of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile."""
+Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY."""
             content.append(prompt)
         
         response = gemini_model.generate_content(content)
         narration = response.text
         return [TextContent(type="text", text=narration)]
+    
+    elif name == "summarize_narrations":
+        narrations = arguments["narrations"]
+        
+        if len(narrations) == 1:
+            # Just return the single narration
+            return [TextContent(type="text", text=narrations[0])]
+        
+        # Combine all narrations and ask Gemini to summarize
+        all_narrations = "\n".join([f"- {n}" for n in narrations])
+        
+        prompt = f"""Here are {len(narrations)} narration sentences about what someone has been doing:
+
+{all_narrations}
+
+Combine ALL the key information into ONE SHORT, funny, sarcastic sentence. Keep the insulting tone and dark humor. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. 
+
+ONE SENTENCE ONLY that captures everything important."""
+        
+        response = gemini_model.generate_content(prompt)
+        summary = response.text
+        return [TextContent(type="text", text=summary)]
     
     elif name == "tts":
         text = arguments["text"]
