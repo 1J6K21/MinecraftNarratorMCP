@@ -167,11 +167,20 @@ Generate 1-2 sentences of funny, sarcastic narration (like a sports commentator 
         # Cleanup old audio files first
         cleanup_old_audio()
         
-        # Use ElevenLabs TTS with custom voice ID
+        # Use ElevenLabs TTS with custom voice ID and settings
+        from elevenlabs import VoiceSettings
+        
         audio = elevenlabs_client.text_to_speech.convert(
             voice_id="nPczCjzI2devNBz1zQrb",
             text=text,
-            model_id="eleven_multilingual_v2"
+            model_id="eleven_multilingual_v2",
+            voice_settings=VoiceSettings(
+                stability=0.5,
+                similarity_boost=0.75,
+                style=0.10,  # 10% style exaggeration
+                use_speaker_boost=True,
+                speed=1.15  # 15% faster
+            )
         )
         
         # Save the audio
