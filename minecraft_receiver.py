@@ -29,8 +29,8 @@ def receive_minecraft_event():
         data = request.json
         
         # Extract event data - new format: event_type and event_source
-        event_type = data.get('event_type', data.get('tool_name', 'unknown'))
-        event_source = data.get('event_source', data.get('parameters', {}).get('blockName', 'unknown'))
+        event_type = data.get('event', data.get('tool_name', 'unknown'))
+        event_source = data.get('source', data.get('parameters', {}).get('blockName', 'unknown'))
         
         # Create event record
         event = {
