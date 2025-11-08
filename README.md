@@ -1,4 +1,4 @@
-# DailyDigestMCP
+# MinecraftNarratorMCP
 Datathon-2025
 
 
