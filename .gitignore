@@ -1,0 +1,24 @@
+# Environment
+.env
+*.env
+
+# Screenshots and audio
+screenshots/
+*.png
+*.mp3
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
