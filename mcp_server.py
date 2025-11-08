@@ -194,16 +194,37 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent | ImageConte
         if not screenshots and not minecraft_context:
             return [TextContent(type="text", text="No data available. Need screenshots or Minecraft data.")]
         
-        # Build prompt for Gemini
+        # Build prompt for Gemini - integrate both sources when available
         content = []
         
-        if len(screenshots) == 2:
-            prompt = f"In 1-2 sentences, describe what changed between these screenshots (first is older, second is newer).{minecraft_context}"
+        if len(screenshots) == 2 and minecraft_context:
+            # Both screenshots and Minecraft data
+            prompt = f"""In 1-2 sentences, describe in detail what is happening by combining:
+1. In sequence the visuals of the two screenshots (first is older, second is newer)
+2. Minecraft gameplay events: {minecraft_context}
+
+Connect the on-screen activity with the in-game actions to tell a cohesive story."""
             content.append(prompt)
             images = [Image.open(img) for img in reversed(screenshots)]
             content.extend(images)
+        elif len(screenshots) == 2:
+            # Only screenshots
+            prompt = "In 1-2 sentences, describe what is happening within the last two screenshots as a sequence in detail (first is older, second is newer)."
+            content.append(prompt)
+            images = [Image.open(img) for img in reversed(screenshots)]
+            content.extend(images)
+        elif len(screenshots) == 1 and minecraft_context:
+            # Single screenshot with Minecraft data
+            prompt = f"""In 1-2 sentences, describe in detail what's happening by combining:
+1. What's visible in this screenshot
+2. Minecraft gameplay events: {minecraft_context}
+
+Connect the visual with the gameplay."""
+            content.append(prompt)
+            content.append(Image.open(screenshots[0]))
         elif len(screenshots) == 1:
-            prompt = f"In 1-2 sentences, describe what's happening in this screenshot.{minecraft_context}"
+            # Only single screenshot
+            prompt = "In 1-2 sentences, describe in detail what's happening in this screenshot."
             content.append(prompt)
             content.append(Image.open(screenshots[0]))
         else:
@@ -220,7 +241,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent | ImageConte
         
         prompt = f"""Based on this: {description}
 
-Generate 1-2 sentences of funny, sarcastic narration (like a sports commentator or David Attenborough). Be brief and entertaining."""
+Generate 1-2 sentences of funny, sarcastic narration (like a sports commentator or David Attenborough). Be brief and entertaining. Be insulting, personal, and dont hold back comments, dark humor encouraged."""
         
         response = gemini_model.generate_content(prompt)
         narration = response.text
