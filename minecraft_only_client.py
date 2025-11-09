@@ -246,25 +246,16 @@ async def process_audio_queue():
         
         if audio_path and audio_path.exists():
             try:
-                # Play both audio files in parallel for faster playback
+                # Play narration first, then SFX
+                print(f"🎵 Playing narration...")
+                await asyncio.to_thread(play_audio, audio_path)
+                
+                # Then play sound effect after narration finishes
                 if sfx_path and sfx_path.exists():
-                    print(f"🎵 Playing sound effect + narration...")
-                    
-                    # Start both audio files in parallel
-                    sfx_task = asyncio.create_task(asyncio.to_thread(play_audio, sfx_path))
-                    
-                    # Small delay so SFX starts first, then start narration
-                    await asyncio.sleep(0.1)
-                    narration_task = asyncio.create_task(asyncio.to_thread(play_audio, audio_path))
-                    
-                    # Wait for both to complete
-                    await asyncio.gather(sfx_task, narration_task)
-                    print(f"✅ Audio playback completed")
-                else:
-                    # No SFX, just play narration
-                    print(f"🎵 Playing narration...")
-                    await asyncio.to_thread(play_audio, audio_path)
-                    print(f"✅ Audio playback completed")
+                    print(f"🎵 Playing sound effect...")
+                    await asyncio.to_thread(play_audio, sfx_path)
+                
+                print(f"✅ Audio playback completed")
             except Exception as e:
                 print(f"❌ Error playing audio: {e}")
                 import traceback

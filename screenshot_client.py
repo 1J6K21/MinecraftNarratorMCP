@@ -236,24 +236,17 @@ async def process_audio_queue():
                     print(f"📥 Downloading SFX: {sfx_info['title']}")
                     sfx_path = download_sfx(sfx_info['mp3'], f"sfx_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3")
                 
-                # Play both audio files in parallel for faster playback
+                # Play narration first, then SFX
                 if audio_path.exists():
+                    print(f"🎵 Playing narration...")
+                    await asyncio.to_thread(play_audio, audio_path)
+                    
+                    # Then play sound effect after narration finishes
                     if sfx_path and sfx_path.exists():
-                        print(f"🎵 Playing sound effect + narration...")
-                        
-                        # Start both audio files in parallel
-                        sfx_task = asyncio.create_task(asyncio.to_thread(play_audio, sfx_path))
-                        
-                        # Small delay so SFX starts first, then start narration
-                        await asyncio.sleep(0.1)
-                        narration_task = asyncio.create_task(asyncio.to_thread(play_audio, audio_path))
-                        
-                        # Wait for both to complete
-                        await asyncio.gather(sfx_task, narration_task)
-                    else:
-                        # No SFX, just play narration
-                        print(f"🎵 Playing narration...")
-                        await asyncio.to_thread(play_audio, audio_path)
+                        print(f"🎵 Playing sound effect...")
+                        await asyncio.to_thread(play_audio, sfx_path)
+                    
+                    print(f"✅ Audio playback completed")
                     
         except Exception as e:
             print(f"❌ Error processing audio: {e}")

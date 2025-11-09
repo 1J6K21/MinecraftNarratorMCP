@@ -56,21 +56,26 @@ def cleanup_old_audio():
 
 def get_sfx_query_from_narration(narration: str) -> str:
     """
-    Determine appropriate SFX query based on narration keywords.
+    Fallback function to extract keyword from narration if AI doesn't provide one.
     
     Sound effects provided by MyInstants API (https://github.com/abdipr/myinstants-api)
     Sounds sourced from MyInstants.com via web scraping.
     """
     narration_lower = narration.lower()
     
-    if any(word in narration_lower for word in ["laugh", "funny", "hilarious", "joke", "laughing"]):
+    # Simple keyword matching as fallback
+    if any(word in narration_lower for word in ["laugh", "funny", "hilarious", "laughing"]):
         return "laugh"
-    elif any(word in narration_lower for word in ["fail", "died", "death", "damage", "falling", "fell"]):
+    elif any(word in narration_lower for word in ["died", "death", "fail", "falling", "fell"]):
         return "bruh"
-    elif any(word in narration_lower for word in ["explosion", "explode", "exploded", "boom", "tnt", "blew"]):
+    elif any(word in narration_lower for word in ["explosion", "explode", "boom", "tnt", "blew"]):
         return "explosion"
-    elif any(word in narration_lower for word in ["wow", "amazing", "incredible", "genius", "brilliant"]):
+    elif any(word in narration_lower for word in ["wow", "amazing", "incredible"]):
         return "wow"
+    elif any(word in narration_lower for word in ["scream", "yell", "shout"]):
+        return "scream"
+    elif any(word in narration_lower for word in ["crash", "smash", "break"]):
+        return "crash"
     else:
         return "bruh"  # default
 
@@ -351,7 +356,13 @@ Generate 1-2 sentences of funny, sarcastic narration (like a sports commentator 
             # Both screenshots and Minecraft data
             prompt = f"""Look at these two screenshots (FIRST is older, SECOND is MOST RECENT) and these Minecraft events: {minecraft_context}
 
-Focus on what's happening in the SECOND (newest) screenshot. Generate ONE SHORT sentence of funny, sarcastic narration about the CURRENT activity. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY."""
+Focus on what's happening in the SECOND (newest) screenshot. Generate ONE SHORT sentence of funny, sarcastic narration about the CURRENT activity. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY.
+
+Then on a new line, write "SFX:" followed by ONE WORD that would make the best comedic sound effect for this narration (like: crash, laugh, explosion, scream, bell, drum, bruh, oof, etc).
+
+Format:
+[narration sentence]
+SFX: [word]"""
             content.append(prompt)
             images = [Image.open(img) for img in reversed(screenshots)]
             content.extend(images)
@@ -359,7 +370,13 @@ Focus on what's happening in the SECOND (newest) screenshot. Generate ONE SHORT 
             # Only screenshots
             prompt = """Look at these two screenshots (FIRST is older, SECOND is MOST RECENT).
 
-Focus on what's happening in the SECOND (newest) screenshot. Generate ONE SHORT sentence of funny, sarcastic narration about the CURRENT activity. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY."""
+Focus on what's happening in the SECOND (newest) screenshot. Generate ONE SHORT sentence of funny, sarcastic narration about the CURRENT activity. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY.
+
+Then on a new line, write "SFX:" followed by ONE WORD that would make the best comedic sound effect for this narration (like: crash, laugh, explosion, scream, bell, drum, bruh, oof, etc).
+
+Format:
+[narration sentence]
+SFX: [word]"""
             content.append(prompt)
             images = [Image.open(img) for img in reversed(screenshots)]
             content.extend(images)
@@ -367,30 +384,62 @@ Focus on what's happening in the SECOND (newest) screenshot. Generate ONE SHORT 
             # Single screenshot with Minecraft data
             prompt = f"""Look at this screenshot and these Minecraft events: {minecraft_context}
 
-Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY."""
+Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY.
+
+Then on a new line, write "SFX:" followed by ONE WORD that would make the best comedic sound effect for this narration (like: crash, laugh, explosion, scream, bell, drum, bruh, oof, etc).
+
+Format:
+[narration sentence]
+SFX: [word]"""
             content.append(prompt)
             content.append(Image.open(screenshots[0]))
         elif len(screenshots) == 1:
             # Only single screenshot
             prompt = """Look at this screenshot.
 
-Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY."""
+Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY.
+
+Then on a new line, write "SFX:" followed by ONE WORD that would make the best comedic sound effect for this narration (like: crash, laugh, explosion, scream, bell, drum, bruh, oof, etc).
+
+Format:
+[narration sentence]
+SFX: [word]"""
             content.append(prompt)
             content.append(Image.open(screenshots[0]))
         else:
             # Only Minecraft data
             prompt = f"""Based on these Minecraft events: {minecraft_context}
 
-Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY."""
+Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY.
+
+Then on a new line, write "SFX:" followed by ONE WORD that would make the best comedic sound effect for this narration (like: crash, laugh, explosion, scream, bell, drum, bruh, oof, etc).
+
+Format:
+[narration sentence]
+SFX: [word]"""
             content.append(prompt)
         
         response = gemini_model.generate_content(content)
-        narration = response.text
+        response_text = response.text.strip()
         
-        # Automatically get appropriate SFX based on narration
+        # Parse the response to extract narration and SFX keyword
+        # Format: "[narration]\nSFX: [word]"
+        if "SFX:" in response_text:
+            parts = response_text.split("SFX:")
+            narration = parts[0].strip()
+            sfx_query = parts[1].strip().lower()
+            # Clean up the keyword
+            sfx_query = sfx_query.replace('"', '').replace("'", '').replace('.', '').replace(',', '').strip()
+            if ' ' in sfx_query:
+                sfx_query = sfx_query.split()[0]
+            print(f"🎯 AI selected SFX keyword: '{sfx_query}'")
+        else:
+            # Fallback if format not followed
+            narration = response_text
+            sfx_query = get_sfx_query_from_narration(narration)
+        
         # Using MyInstants API: https://github.com/abdipr/myinstants-api
         # Sounds from MyInstants.com (used with attribution for non-commercial purposes)
-        sfx_query = get_sfx_query_from_narration(narration)
         
         try:
             # Search for sound effect
@@ -402,9 +451,15 @@ Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentat
             sfx_response.raise_for_status()
             sfx_data = sfx_response.json()
             
-            # Get the first sound effect
+            # Pick a random sound effect from results for variety
             if "data" in sfx_data and sfx_data["data"]:
-                sfx_info = sfx_data["data"][0]
+                import random
+                # Get up to 10 results and pick one randomly
+                available_sounds = sfx_data["data"][:10]
+                sfx_info = random.choice(available_sounds)
+                
+                print(f"🎲 Randomly selected: '{sfx_info.get('title')}' from {len(available_sounds)} options")
+                
                 # Return narration with SFX info as JSON
                 result = {
                     "narration": narration,

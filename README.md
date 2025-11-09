@@ -130,8 +130,8 @@ You can also use this as an MCP server in Kiro or other MCP clients:
 
 1. **Screenshots**: Uses macOS `screencapture` to grab screenshots
 2. **Analysis**: Gemini 2.5 Flash analyzes images and describes changes (fast & free!)
-3. **Narration**: Gemini generates sarcastic commentary
-4. **Sound Effects**: MCP server automatically analyzes narration keywords and selects appropriate SFX from MyInstants API
+3. **Narration + SFX Keyword**: Gemini generates sarcastic commentary AND extracts the best sound effect keyword in ONE API call (super fast!)
+4. **Sound Effect Search**: Searches MyInstants API with the AI-selected keyword and randomly picks from top results
 5. **Speech**: ElevenLabs TTS converts text to audio with high-quality voice
 6. **Playback**: Plays sound effect and narration audio in parallel for perfect timing
 
@@ -203,14 +203,16 @@ If you use this project, please maintain this attribution and follow the same gu
 
 ## Sound Effects
 
-The system automatically adds comedic sound effects from the MyInstants API based on narration content:
+The system uses AI to automatically select the perfect sound effect for each narration:
 
-- **"bruh"** sound for failures, deaths, or damage
-- **"laugh"** sound for funny or hilarious moments
-- **"explosion"** sound for TNT, explosions, or boom events
-- **"wow"** sound for amazing or incredible achievements
+1. **AI Keyword Extraction**: Gemini analyzes the narration and extracts the single best keyword for a sound effect (e.g., "crash", "laugh", "explosion", "oof", "bruh", "scream", etc.)
+2. **MyInstants Search**: Searches the MyInstants API with that keyword
+3. **Random Selection**: Picks a random sound from the top 10 results for variety
+4. **Parallel Playback**: Plays sound effect and narration simultaneously for perfect comedic timing
 
-Sound effects play in parallel with narration for perfect comedic timing!
+This gives unlimited variety - every narration gets a unique, contextually appropriate sound effect!
+
+**Example keywords extracted by AI**: crash, laugh, explosion, scream, bell, drum, bruh, oof, yikes, gasp, applause, horn, punch, falling, and many more!
 
 ### Credits
 
