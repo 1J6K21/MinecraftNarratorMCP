@@ -1,4 +1,4 @@
-# Screenshot Narrator MCP
+# Narrator MCP
 
 A fun MCP server that takes screenshots, describes what changed, generates hilarious narration, and plays it back as audio!
 
