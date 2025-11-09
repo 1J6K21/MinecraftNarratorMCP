@@ -3,8 +3,8 @@
 A fun MCP server that takes screenshots, describes what changed, generates hilarious narration, and plays it back as audio!
 
 ## Features
-### Connected to the simultaneously programmed Minecraft Mod that updates a the HTTP port with data
-- View: https://github.com/nianjindev/MinecraftMCPSender
+### Connected to our *custom made and simultaneously programmed* Minecraft Mod that updates a the HTTP port with data
+View: https://github.com/nianjindev/MinecraftMCPSender
 ### There is a UI to view the data on the port. To host the UI, run: 
 ```
 python3 minecraft_receiver.py
@@ -16,6 +16,35 @@ python3 minecraft_receiver.py
 - **Sound Effects**: Automatically adds comedic sound effects from MyInstants API
 - **TTS**: Converts narration to speech with ElevenLabs TTS
 - **Auto-cleanup**: Only keeps the last 5 screenshots
+
+
+## Datathon2025
+We made this product in Texas A&M's DATATHON 2025 - A hackathon with the focus of AI, ML, Computer Science, Data Science, and Statistics!
+<br></br>
+Contributers:
+<br></br>
+### Jonathan Kalsky '29 (CS):
+
+www.linkedin.com/in/jonathan-kalsky
+
+### Aaron Yang '29 (CS):
+
+https://www.linkedin.com/in/nianjin-yang/
+
+### Ethan Hince '29 (CS):
+
+https://www.linkedin.com/in/ethan-hince-a831a5381/
+
+
+<br></br>
+Brief Demo:
+<br></br>
+[https://youtu.be/umaCNd4jPfY?si=QRRDb36p3LI-7tyr](https://youtu.be/8Ra5xCAM_Yo?si=og1JRhXpG3UWLjHj)
+<br></br>
+<br></br>
+### License
+We do not allow the reproducing, forking, or stealing of our idea, code, or intellectual property. For information email jonathan.kalsky@gmail.com
+
 
 ## Setup
 
