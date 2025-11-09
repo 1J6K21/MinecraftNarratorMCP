@@ -12,7 +12,7 @@ from PIL import Image
 import google.generativeai as genai
 from elevenlabs import ElevenLabs
 from mcp.types import TextContent, ImageContent
-from mcp_utilities import (
+from .utilities import (
     cleanup_old_screenshots,
     get_last_screenshots,
     cleanup_old_audio,

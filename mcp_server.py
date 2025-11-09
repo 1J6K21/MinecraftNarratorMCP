@@ -18,13 +18,6 @@ from typing import Optional
 import google.generativeai as genai
 from mcp.server import Server
 from mcp.types import Tool, TextContent, ImageContent
-from mcp_utilities import (
-    cleanup_old_screenshots,
-    cleanup_old_audio,
-    encode_image,
-    get_sfx_query_from_narration,
-    get_last_screenshots
-)
 from mcp_tool_utils import ToolDefinitions, ToolHandlers
 import mcp.server.stdio
 from PIL import Image
