@@ -111,31 +111,31 @@ This will:
 
 **Note:** The Minecraft receiver runs automatically in the background. No need to start it separately!
 
-┌─────────────────┐
-│ Minecraft Mod │ (Java)
-│ (in game) │
-└────────┬────────┘
-│ HTTP POST
-▼
-┌─────────────────────┐
-│ minecraft_receiver │ (Flask HTTP server)
-│ Port 8080 │ Saves to minecraft_data.json
-└────────┬────────────┘
-│ File write
-▼
-┌─────────────────────┐
-│ minecraft_data.json │ (Shared file)
-└────────┬────────────┘
-│ File read
-▼
-┌─────────────────────┐
-│ screenshot_client │ Reads file, calls MCP tool
-└────────┬────────────┘
-│ MCP call
-▼
-┌─────────────────────┐
-│ mcp_server.py │ Processes data via get_minecraft_input tool
-└─────────────────────┘
+┌─────────────────┐<br></br>
+│ Minecraft Mod │ (Java)<br></br>
+│ (in game) │<br></br>
+└────────┬────────┘<br></br>
+│ HTTP POST<br></br>
+▼<br></br>
+┌─────────────────────┐<br></br>
+│ minecraft_receiver │ (Flask HTTP server)<br></br>
+│ Port 8080 │ Saves to minecraft_data.json<br></br>
+└────────┬────────────┘<br></br>
+│ File write<br></br>
+▼<br></br>
+┌─────────────────────┐<br></br>
+│ minecraft_data.json │ (Shared file)<br></br>
+└────────┬────────────┘<br></br>
+│ File read<br></br>
+▼<br></br>
+┌─────────────────────┐<br></br>
+│ screenshot_client │ Reads file, calls MCP tool<br></br>
+└────────┬────────────┘<br></br>
+│ MCP call<br></br>
+▼<br></br>
+┌─────────────────────┐<br></br>
+│ mcp_server.py │ Processes data via get_minecraft_input tool<br></br>
+└─────────────────────┘<br></br>
 
 ### Use as MCP Server
 
