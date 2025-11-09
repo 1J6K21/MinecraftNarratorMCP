@@ -240,6 +240,8 @@ async def minecraft_event_loop():
                     events = json.load(f)
                 
                 if not events:
+                    # Reset timestamp when events are empty - stay silent
+                    last_timestamp = None
                     await asyncio.sleep(CHECK_INTERVAL)
                     continue
                 
@@ -254,6 +256,9 @@ async def minecraft_event_loop():
                     last_timestamp = current_timestamp
             except Exception as e:
                 print(f"⚠️  Error reading events: {e}")
+        else:
+            # Reset timestamp if file doesn't exist
+            last_timestamp = None
         
         await asyncio.sleep(CHECK_INTERVAL)
 
