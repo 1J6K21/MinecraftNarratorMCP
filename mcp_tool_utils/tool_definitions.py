@@ -83,6 +83,10 @@ class ToolDefinitions:
                     "activity_mode": {
                         "type": "string",
                         "description": "The most common activity type in this batch"
+                    },
+                    "explicit": {
+                        "type": "boolean",
+                        "description": "Whether to use explicit/profane language or family-friendly meme references"
                     }
                 },
                 "required": []

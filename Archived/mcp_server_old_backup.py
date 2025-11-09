@@ -188,7 +188,7 @@ Connect the visual with the gameplay."""
         
         prompt = f"""Based on this: {description}
 
-Generate 1-2 sentences of funny, sarcastic narration (like a sports commentator or David Attenborough). Be brief and entertaining. Be insulting, personal, and dont hold back comments, dark humor encouraged. Make sure to overly use words like dumbass, refere to the subject as 'this fucker' and for other words use this word bank: [birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile]"""
+Generate 1-2 sentences of funny, sarcastic narration (like a sports commentator or David Attenborough). Be brief and entertaining. Be insulting, personal, and dont hold back comments, dark humor encouraged. Make sure to overly use words like dumbass, refere to the subject as 'this fucker' and for other words use this word bank: [birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile, fatass, fatso]"""
         
         response = gemini_model.generate_content(prompt)
         narration = response.text
@@ -219,7 +219,7 @@ Generate 1-2 sentences of funny, sarcastic narration (like a sports commentator 
             # Both screenshots and Minecraft data
             prompt = f"""Look at these two screenshots (FIRST is older, SECOND is MOST RECENT) and these Minecraft events: {minecraft_context}
 
-Focus on what's happening in the SECOND (newest) screenshot. Generate ONE SHORT sentence of funny, sarcastic narration about the CURRENT activity. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY.
+Focus on what's happening in the SECOND (newest) screenshot. Generate ONE SHORT sentence of funny, sarcastic narration about the CURRENT activity. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile,fatass, fatso. KEEP IT BRIEF - ONE SENTENCE ONLY.
 
 Then on a new line, write "SFX:" followed by ONE WORD that would make the best comedic sound effect for this narration (like: crash, laugh, explosion, scream, bell, drum, bruh, oof, etc).
 
@@ -233,7 +233,7 @@ SFX: [word]"""
             # Only screenshots
             prompt = """Look at these two screenshots (FIRST is older, SECOND is MOST RECENT).
 
-Focus on what's happening in the SECOND (newest) screenshot. Generate ONE SHORT sentence of funny, sarcastic narration about the CURRENT activity. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY.
+Focus on what's happening in the SECOND (newest) screenshot. Generate ONE SHORT sentence of funny, sarcastic narration about the CURRENT activity. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile, fatass, fatso. KEEP IT BRIEF - ONE SENTENCE ONLY.
 
 Then on a new line, write "SFX:" followed by ONE WORD that would make the best comedic sound effect for this narration (like: crash, laugh, explosion, scream, bell, drum, bruh, oof, etc).
 
@@ -247,7 +247,7 @@ SFX: [word]"""
             # Single screenshot with Minecraft data
             prompt = f"""Look at this screenshot and these Minecraft events: {minecraft_context}
 
-Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY.
+Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile, fatass, fatso. KEEP IT BRIEF - ONE SENTENCE ONLY.
 
 Then on a new line, write "SFX:" followed by ONE WORD that would make the best comedic sound effect for this narration (like: crash, laugh, explosion, scream, bell, drum, bruh, oof, etc).
 
@@ -260,7 +260,7 @@ SFX: [word]"""
             # Only single screenshot
             prompt = """Look at this screenshot.
 
-Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY.
+Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile, fatass, fatso. KEEP IT BRIEF - ONE SENTENCE ONLY.
 
 Then on a new line, write "SFX:" followed by ONE WORD that would make the best comedic sound effect for this narration (like: crash, laugh, explosion, scream, bell, drum, bruh, oof, etc).
 
@@ -273,7 +273,7 @@ SFX: [word]"""
             # Only Minecraft data
             prompt = f"""Based on these Minecraft events: {minecraft_context}
 
-Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. KEEP IT BRIEF - ONE SENTENCE ONLY.
+Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentator or David Attenborough. Be insulting, personal, dark humor encouraged. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile, fatass, fatso. KEEP IT BRIEF - ONE SENTENCE ONLY.
 
 Then on a new line, write "SFX:" followed by ONE WORD that would make the best comedic sound effect for this narration (like: crash, laugh, explosion, scream, bell, drum, bruh, oof, etc).
 
@@ -363,7 +363,7 @@ SFX: [word]"""
 
 {all_narrations}
 
-Combine ALL the key information into ONE SHORT, funny, sarcastic sentence. Keep the insulting tone and dark humor. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. 
+Combine ALL the key information into ONE SHORT, funny, sarcastic sentence. Keep the insulting tone and dark humor. Use words like: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile, fatass, fatso. 
 
 ONE SENTENCE ONLY that captures everything important."""
         

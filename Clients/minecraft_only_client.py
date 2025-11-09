@@ -27,7 +27,7 @@ MINECRAFT_DATA_FILE = SCREENSHOT_DIR / "minecraft_data.json"
 CHECK_INTERVAL = 2  # Check for new events every 2 seconds
 
 # Configuration
-EXPLICIT = True  # Set to False for family-friendly mode
+EXPLICIT = False  # Set to False for family-friendly mode
 MIN_BATCH_SIZE = 5  # Minimum events before generating narration
 
 # Cooldown audio paths
@@ -339,7 +339,8 @@ async def generate_audio_pipeline():
                         "image_count": 0,
                         "include_minecraft": True,
                         "is_repetitive": is_repetitive,
-                        "activity_mode": activity_mode
+                        "activity_mode": activity_mode,
+                        "explicit": EXPLICIT
                     })
                     
                     raw_response = result.content[0].text

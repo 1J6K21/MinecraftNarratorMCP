@@ -190,6 +190,7 @@ Connect the on-screen activity with the in-game actions to tell a cohesive story
         include_minecraft = arguments.get("include_minecraft", False)
         is_repetitive = arguments.get("is_repetitive", False)
         activity_mode = arguments.get("activity_mode", "unknown")
+        explicit = arguments.get("explicit", True)
         
         # Get screenshots if requested
         screenshots = []
@@ -247,10 +248,17 @@ Sound effect keywords: bruh, laugh, explosion, wow, scream, crash, fail, epic, o
             content.append(prompt)
             content.append(Image.open(screenshots[0]))
         else:
+            # Build style guide based on explicit setting
+            if explicit:
+                style_guide = """Style: Funny, sarcastic sports-commentator. Be insulting and personal. Use profanity freely: dumbass, this fucker, birdbrain, asshole, bimbo, bonehead, cocksucker, cunt, wanker, dick, dipshit, dork, fatso, pisser, turd, twat, wimp, wuss, bozo, buffoon, moron, goon, imbecile. Don't hold back!"""
+            else:
+                style_guide = """Style: Act like a stand-up comedian doing crowd work! Be funny and positive using Reddit/meme culture. Reference popular memes, Reddit culture, gaming references, and internet humor. Be playful and encouraging while still being sarcastic. Use observational comedy and callbacks. Examples: "This is fine" meme, "Task failed successfully", "Suffering from success", "He's a little confused but he's got the spirit", "Professionals have standards", etc."""
+            
             # Check for repetitive activity
             repetition_context = ""
             if is_repetitive:
-                repetition_context = f"""
+                if explicit:
+                    repetition_context = f"""
 
 IMPORTANT: The player has been doing '{activity_mode}' repeatedly! Instead of normal narration, pick ONE of these special modes:
 1. SING: Make up a short silly song about their repetitive behavior (2 lines max)
@@ -258,11 +266,23 @@ IMPORTANT: The player has been doing '{activity_mode}' repeatedly! Instead of no
 3. DAD JOKE: Tell a dad joke related to their activity, then roast them with it
 4. FUN FACT: Share a fun fact, then use it to roast them (e.g., "Did you know pigs don't shower? Does that make you a pig?")
 
-Be creative and mean in a funny way, this is where you show your empathy, but you still dont hold back invasive comments!"""
-            
-            prompt = f"""Based on these Minecraft events: {minecraft_context}{repetition_context}
+Be creative and mean in a funny way!"""
+                else:
+                    repetition_context = f"""
 
-Generate ONE sentence of funny, sarcastic sports-commentator-style narration.
+IMPORTANT: The player has been doing '{activity_mode}' repeatedly! Act like a stand-up comedian noticing this pattern. Pick ONE of these special modes:
+1. MEME: Reference a popular meme that fits their repetitive behavior (like a comedian would)
+2. REDDIT: Make a Reddit-style comment as if you're doing crowd work (like r/madlads or r/me_irl)
+3. GAMING REFERENCE: Reference a popular game/streamer moment with comedic timing
+4. WHOLESOME ROAST: Encourage them but in a hilariously backhanded way (classic stand-up style)
+
+Be creative and funny using internet culture and stand-up comedy techniques!"""
+            
+            prompt = f"""Based on these Minecraft events: {minecraft_context}
+
+{style_guide}{repetition_context}
+
+Generate ONE sentence of funny narration.
 Then suggest ONE sound effect keyword.
 
 Respond in JSON format:
