@@ -25,8 +25,7 @@ from mcp_utilities import (
     get_sfx_query_from_narration,
     get_last_screenshots
 )
-from tool_definitions import ToolDefinitions
-from tool_handlers import ToolHandlers
+from mcp_tool_utils import ToolDefinitions, ToolHandlers
 import mcp.server.stdio
 from PIL import Image
 import subprocess
