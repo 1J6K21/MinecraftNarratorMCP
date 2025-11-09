@@ -18,11 +18,12 @@ def cleanup_old_screenshots(screenshot_dir: Path, max_screenshots: int = 5):
         oldest.unlink()
 
 
-def cleanup_old_audio(screenshot_dir: Path, max_audio: int = 2):
-    """Keep only the last N audio files"""
-    audio_files = sorted(screenshot_dir.glob("*.mp3"), key=os.path.getmtime)
-    while len(audio_files) > max_audio:
-        oldest = audio_files.pop(0)
+def cleanup_old_audio(screenshot_dir: Path, max_audio: int = 10):
+    """Keep only the last N narration audio files (excludes SFX cache)"""
+    # Only cleanup narration files, not SFX cache
+    narration_files = sorted(screenshot_dir.glob("narration_*.mp3"), key=os.path.getmtime)
+    while len(narration_files) > max_audio:
+        oldest = narration_files.pop(0)
         oldest.unlink()
 
 

@@ -260,6 +260,8 @@ Sound effect keywords: bruh, laugh, explosion, wow, scream, crash, fail, epic, o
         response = self.gemini_model.generate_content(content)
         response_text = response.text.strip()
         
+        print(f"🤖 Gemini response: {response_text[:100]}...")
+        
         # Parse JSON response
         try:
             # Clean up markdown code blocks if present
@@ -271,23 +273,27 @@ Sound effect keywords: bruh, laugh, explosion, wow, scream, crash, fail, epic, o
             data = json.loads(response_text)
             narration = data.get("narration", response_text)
             sfx_keyword = data.get("sfx_keyword", "bruh")
-        except json.JSONDecodeError:
+            print(f"✅ Parsed JSON - narration: {narration[:50]}..., sfx_keyword: {sfx_keyword}")
+        except json.JSONDecodeError as e:
             # Fallback if JSON parsing fails
+            print(f"⚠️  JSON parse failed: {e}, using fallback")
             narration = response_text
             sfx_keyword = get_sfx_query_from_narration(narration)
         
         # Search for sound effect
         try:
+            print(f"🔍 Searching SFX for keyword: '{sfx_keyword}'")
             sfx_response = requests.get(
-                "https://api.myinstants.com/v1/instants/search",
-                params={"query": sfx_keyword, "limit": 10},  # Get more options for variety
+                "https://myinstants-api.vercel.app/search",
+                params={"q": sfx_keyword},  # Note: parameter is 'q' not 'query'
                 timeout=5
             )
             sfx_data = sfx_response.json()
             
-            if sfx_data.get("results"):
+            if sfx_data.get("data"):  # Note: key is 'data' not 'results'
+                print(f"✅ Found {len(sfx_data['data'])} SFX options")
                 # Use sliding window to select unique SFX
-                available_sounds = sfx_data["results"]
+                available_sounds = sfx_data["data"]
                 sfx = self._select_unique_sfx(available_sounds)
                 
                 if sfx:
@@ -295,15 +301,19 @@ Sound effect keywords: bruh, laugh, explosion, wow, scream, crash, fail, epic, o
                         "narration": narration,
                         "sfx": {
                             "title": sfx.get("title", "Unknown"),
-                            "mp3": sfx.get("sound", ""),
+                            "mp3": sfx.get("mp3", ""),  # Fixed: was 'sound', now 'mp3'
                             "query": sfx_keyword
                         }
                     }
+                    print(f"🎵 Selected SFX: {sfx.get('title')} - URL: {sfx.get('mp3', 'NO URL')[:50]}")
                 else:
+                    print(f"⚠️  No unique SFX found")
                     result = {"narration": narration, "sfx": None}
             else:
+                print(f"⚠️  No SFX results from API")
                 result = {"narration": narration, "sfx": None}
-        except Exception:
+        except Exception as e:
+            print(f"❌ SFX search error: {e}")
             result = {"narration": narration, "sfx": None}
         
         return [TextContent(type="text", text=json.dumps(result))]
@@ -333,20 +343,20 @@ Keep the sarcastic sports-commentator style. ONE sentence only!"""
         
         try:
             response = requests.get(
-                "https://api.myinstants.com/v1/instants/search",
-                params={"query": query, "limit": limit},
+                "https://myinstants-api.vercel.app/search",
+                params={"q": query},
                 timeout=5
             )
             data = response.json()
             
-            if not data.get("results"):
+            if not data.get("data"):
                 return [TextContent(type="text", text=f"No sound effects found for '{query}'")]
             
             results = []
-            for sfx in data["results"]:
+            for sfx in data["data"][:limit]:  # Limit results manually
                 results.append({
                     "title": sfx.get("title", "Unknown"),
-                    "mp3": sfx.get("sound", ""),
+                    "mp3": sfx.get("mp3", ""),
                     "query": query
                 })
             
@@ -359,20 +369,23 @@ Keep the sarcastic sports-commentator style. ONE sentence only!"""
         text = arguments["text"]
         output_file = arguments.get("output_file", "narration.mp3")
         
-        # Cleanup old audio files first
-        cleanup_old_audio(self.screenshot_dir, 2)
+        # Cleanup old narration files (SFX cache is preserved)
+        cleanup_old_audio(self.screenshot_dir, 10)
         
         # Use ElevenLabs TTS with custom voice ID and settings
-        audio = self.elevenlabs_client.generate(
-            text=text,
-            voice="pNInz6obpgDQGcFmaJgB",  # Adam voice
-            model="eleven_multilingual_v2"
-        )
-        
-        # Save audio file
-        output_path = self.screenshot_dir / output_file
-        with open(output_path, "wb") as f:
-            for chunk in audio:
-                f.write(chunk)
-        
-        return [TextContent(type="text", text=f"Audio saved to {output_file}")]
+        try:
+            audio = self.elevenlabs_client.text_to_speech.convert(
+                voice_id="nPczCjzI2devNBz1zQrb",  # Brian voice
+                text=text,
+                model_id="eleven_multilingual_v2"
+            )
+            
+            # Save audio file
+            output_path = self.screenshot_dir / output_file
+            with open(output_path, "wb") as f:
+                for chunk in audio:
+                    f.write(chunk)
+            
+            return [TextContent(type="text", text=f"Audio saved to {output_file}")]
+        except Exception as e:
+            return [TextContent(type="text", text=f"TTS Error: {str(e)}")]

@@ -33,6 +33,10 @@ EXPLICIT = True  # Set to False for family-friendly mode
 COOLDOWN_AUDIO_EXPLICIT = Path("./Resources/CoolDownAudios/CoolDown_explicit.mp3")
 COOLDOWN_AUDIO_NICE = Path("./Resources/CoolDownAudios/CoolDown_nice.mp3")
 
+# SFX Cache directory
+SFX_CACHE_DIR = SCREENSHOT_DIR / "sfx_cache"
+SFX_CACHE_DIR.mkdir(exist_ok=True)
+
 # Global state for pipeline
 event_queue = []  # Raw events waiting to be narrated
 audio_queue = []  # Generated audio ready to play
@@ -41,19 +45,40 @@ is_generating_narration = False  # Singleton flag: only one generation at a time
 event_lock = threading.Lock()
 audio_lock = threading.Lock()
 
-def download_sfx(mp3_url: str, filename: str) -> Path:
+def sanitize_filename(title: str) -> str:
+    """Convert SFX title to safe filename"""
+    import re
+    # Remove special characters, keep alphanumeric and spaces
+    safe = re.sub(r'[^\w\s-]', '', title)
+    # Replace spaces with underscores
+    safe = re.sub(r'\s+', '_', safe)
+    # Limit length
+    return safe[:50].lower()
+
+def download_sfx(mp3_url: str, title: str) -> Path:
     """
-    Download sound effect from URL.
+    Download sound effect from URL with caching.
     
     Sound effects provided by MyInstants API (https://github.com/abdipr/myinstants-api)
     Sounds sourced from MyInstants.com. Used with attribution for non-commercial purposes.
     """
-    sfx_path = SCREENSHOT_DIR / filename
+    # Create cache filename from title
+    cache_filename = f"{sanitize_filename(title)}.mp3"
+    sfx_path = SFX_CACHE_DIR / cache_filename
+    
+    # Check if already cached
+    if sfx_path.exists():
+        print(f"✅ Using cached SFX: {cache_filename}")
+        return sfx_path
+    
+    # Download if not cached
     try:
+        print(f"📥 Downloading new SFX: {title}")
         response = requests.get(mp3_url, timeout=10)
         response.raise_for_status()
         with open(sfx_path, 'wb') as f:
             f.write(response.content)
+        print(f"💾 Cached SFX: {cache_filename}")
         return sfx_path
     except Exception as e:
         print(f"⚠️  Failed to download SFX: {e}")
@@ -176,7 +201,8 @@ async def generate_audio_file(batch_narrations):
         raise
     except Exception as e:
         # Suppress process termination errors - they're expected during cleanup
-        if "Process group termination" not in str(e) and "TaskGroup" not in str(e):
+        error_str = str(e)
+        if not any(x in error_str for x in ["Process group termination", "TaskGroup", "Operation not permitted"]):
             print(f"❌ Error generating audio: {e}")
         return None
 
@@ -271,9 +297,15 @@ async def generate_audio_pipeline():
                         "include_minecraft": True
                     })
                     
-                    response_data = json.loads(result.content[0].text)
+                    raw_response = result.content[0].text
+                    print(f"🔍 Raw MCP response: {raw_response[:200]}...")
+                    
+                    response_data = json.loads(raw_response)
+                    print(f"📦 Parsed response keys: {list(response_data.keys())}")
+                    
                     narration = response_data["narration"]
                     sfx_info = response_data.get("sfx")
+                    print(f"🎵 SFX info type: {type(sfx_info)}, value: {sfx_info}")
                     
                     # Check for rate limit in narration response
                     if "429" in narration or "quota exceeded" in narration.lower() or "rate limit" in narration.lower():
@@ -282,23 +314,36 @@ async def generate_audio_pipeline():
                     else:
                         print(f"📝 Narration: {narration[:80]}...")
                         if sfx_info:
-                            print(f"🎵 SFX: {sfx_info['title']}")
+                            print(f"🎵 SFX selected: {sfx_info['title']} (query: {sfx_info.get('query', 'N/A')})")
+                        else:
+                            print(f"⚠️  No SFX info in response")
                         
                         # Generate audio
                         audio_filename = f"narration_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
-                        await session.call_tool("tts", {"text": narration, "output_file": audio_filename})
+                        tts_result = await session.call_tool("tts", {"text": narration, "output_file": audio_filename})
+                        print(f"🎙️  TTS result: {tts_result.content[0].text if tts_result.content else 'No response'}")
+                        
                         audio_path = SCREENSHOT_DIR / audio_filename
                         
-                        # Download SFX
+                        # Wait a moment for file to be written
+                        await asyncio.sleep(0.5)
+                        
+                        # Download/cache SFX
                         sfx_path = None
                         if sfx_info:
-                            sfx_path = download_sfx(sfx_info['mp3'], f"sfx_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3")
+                            sfx_path = download_sfx(sfx_info['mp3'], sfx_info['title'])
+                            if sfx_path:
+                                print(f"✅ SFX downloaded: {sfx_path}")
+                            else:
+                                print(f"❌ SFX download failed")
                         
                         # Add to audio queue
                         if audio_path.exists():
                             with audio_lock:
                                 audio_queue.append({"audio_path": audio_path, "sfx_path": sfx_path})
                             print(f"✅ Audio ready ({len(audio_queue)} in queue)")
+                        else:
+                            print(f"⚠️  Audio file not found: {audio_path}")
                     
         except Exception as e:
             error_str = str(e)
@@ -306,7 +351,10 @@ async def generate_audio_pipeline():
             if "429" in error_str or "quota exceeded" in error_str.lower() or "rate limit" in error_str.lower():
                 print("⏱️  Rate limit detected - playing cooldown audio")
                 rate_limited = True
-            elif "Process group termination" not in error_str:
+            # Suppress expected cleanup errors
+            elif any(x in error_str for x in ["Process group termination", "TaskGroup", "Operation not permitted"]):
+                pass  # Expected during cleanup, ignore silently
+            else:
                 print(f"❌ Error: {e}")
         
         # Play cooldown audio if rate limited
@@ -326,11 +374,20 @@ async def play_audio_pipeline():
     """Pipeline: Play audio as soon as it's ready"""
     global is_playing_audio
     
+    print("🎧 Audio playback pipeline started")
+    
     while True:
-        # Wait if no audio ready
+        # Wait if no audio ready OR currently playing
         if not audio_queue:
             await asyncio.sleep(0.5)
             continue
+        
+        if is_playing_audio:
+            print(f"⏸️  Waiting for current playback to finish...")
+            await asyncio.sleep(0.5)
+            continue
+        
+        print(f"🎵 Audio queue has {len(audio_queue)} item(s), is_playing={is_playing_audio}")
         
         # Get next audio to play
         with audio_lock:
@@ -341,7 +398,10 @@ async def play_audio_pipeline():
         audio_path = audio_item["audio_path"]
         sfx_path = audio_item["sfx_path"]
         
+        print(f"🎬 Playing: narration={audio_path.name}, sfx={sfx_path.name if sfx_path else 'None'}")
+        
         is_playing_audio = True
+        print(f"🔒 Playback lock acquired (is_playing={is_playing_audio})")
         
         try:
             # Play narration first, then SFX
@@ -349,18 +409,26 @@ async def play_audio_pipeline():
             await asyncio.to_thread(play_audio, audio_path)
             
             # Then play sound effect after narration finishes (max 5 seconds)
-            if sfx_path and sfx_path.exists():
-                print(f"🎵 Playing sound effect (max 5s)...")
-                await asyncio.to_thread(play_audio, sfx_path, 5.0)
+            if sfx_path:
+                if sfx_path.exists():
+                    print(f"🎵 Playing sound effect: {sfx_path.name} (max 5s)...")
+                    await asyncio.to_thread(play_audio, sfx_path, 5.0)
+                else:
+                    print(f"⚠️  SFX file not found: {sfx_path}")
+            else:
+                print(f"ℹ️  No SFX for this narration")
             
             print(f"✅ Audio playback completed")
         except Exception as e:
             print(f"❌ Error playing audio: {e}")
             import traceback
             traceback.print_exc()
-        
-        is_playing_audio = False
-        print(f"{'='*50}\n")
+        finally:
+            # Small delay to ensure audio is fully finished
+            await asyncio.sleep(0.3)
+            is_playing_audio = False
+            print(f"🔓 Playback lock released (is_playing={is_playing_audio})")
+            print(f"{'='*50}\n")
 
 def start_minecraft_receiver():
     """Start the Minecraft receiver server in background"""
