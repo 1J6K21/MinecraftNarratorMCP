@@ -75,6 +75,14 @@ class ToolDefinitions:
                     "include_minecraft": {
                         "type": "boolean",
                         "description": "Whether to include Minecraft mod data"
+                    },
+                    "is_repetitive": {
+                        "type": "boolean",
+                        "description": "Whether the player is doing repetitive activity"
+                    },
+                    "activity_mode": {
+                        "type": "string",
+                        "description": "The most common activity type in this batch"
                     }
                 },
                 "required": []

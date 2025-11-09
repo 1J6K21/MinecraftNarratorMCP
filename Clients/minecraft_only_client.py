@@ -45,6 +45,8 @@ is_playing_audio = False
 is_generating_narration = False  # Singleton flag: only one generation at a time
 event_lock = threading.Lock()
 audio_lock = threading.Lock()
+activity_history = []  # Last 2 activity modes for repetition detection
+MAX_ACTIVITY_HISTORY = 2
 
 def sanitize_filename(title: str) -> str:
     """Convert SFX title to safe filename"""
@@ -55,6 +57,21 @@ def sanitize_filename(title: str) -> str:
     safe = re.sub(r'\s+', '_', safe)
     # Limit length
     return safe[:50].lower()
+
+def calculate_activity_mode(events: list) -> str:
+    """Calculate the most common event type (mode) from a batch of events"""
+    from collections import Counter
+    if not events:
+        return "idle"
+    
+    # Extract event types
+    event_types = [event.get('event_type', 'unknown') for event in events]
+    
+    # Find most common
+    counter = Counter(event_types)
+    mode = counter.most_common(1)[0][0]
+    
+    return mode
 
 def download_sfx(mp3_url: str, title: str) -> Path:
     """
@@ -274,8 +291,26 @@ async def generate_audio_pipeline():
             batch_events = event_queue.copy()
             event_queue.clear()
         
+        # Calculate activity mode (most common event type)
+        activity_mode = calculate_activity_mode(batch_events)
+        print(f"📈 Calculated activity mode from {len(batch_events)} events: '{activity_mode}'")
+        
+        # Check for repetition
+        is_repetitive = len(activity_history) >= 2 and activity_history[-1] == activity_history[-2] == activity_mode
+        
+        # Update activity history
+        activity_history.append(activity_mode)
+        if len(activity_history) > MAX_ACTIVITY_HISTORY:
+            removed = activity_history.pop(0)
+            print(f"📤 Removed old activity from history: '{removed}'")
+        
+        print(f"�  Saved activity to history: '{activity_mode}'")
+        
         print(f"\n{'='*50}")
         print(f"🎤 Generating narration for {len(batch_events)} event(s)...")
+        print(f"📊 Current activity: {activity_mode} | Full history: {activity_history}")
+        if is_repetitive:
+            print(f"🔁 REPETITION DETECTED! Player keeps doing: {activity_mode}")
         print(f"{'='*50}")
         
         # Generate single narration from all batched events
@@ -302,7 +337,9 @@ async def generate_audio_pipeline():
                     # Generate ONE narration for all events
                     result = await session.call_tool("describe_for_narration", {
                         "image_count": 0,
-                        "include_minecraft": True
+                        "include_minecraft": True,
+                        "is_repetitive": is_repetitive,
+                        "activity_mode": activity_mode
                     })
                     
                     raw_response = result.content[0].text
@@ -313,7 +350,6 @@ async def generate_audio_pipeline():
                     
                     narration = response_data["narration"]
                     sfx_info = response_data.get("sfx")
-                    print(f"🎵 SFX info type: {type(sfx_info)}, value: {sfx_info}")
                     
                     # Check for rate limit in narration response
                     if "429" in narration or "quota exceeded" in narration.lower() or "rate limit" in narration.lower():

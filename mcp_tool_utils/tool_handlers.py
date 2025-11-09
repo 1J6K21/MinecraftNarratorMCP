@@ -188,6 +188,8 @@ Connect the on-screen activity with the in-game actions to tell a cohesive story
         """Combined tool: analyze, narrate, and select SFX"""
         image_count = arguments.get("image_count", 2)
         include_minecraft = arguments.get("include_minecraft", False)
+        is_repetitive = arguments.get("is_repetitive", False)
+        activity_mode = arguments.get("activity_mode", "unknown")
         
         # Get screenshots if requested
         screenshots = []
@@ -245,10 +247,23 @@ Sound effect keywords: bruh, laugh, explosion, wow, scream, crash, fail, epic, o
             content.append(prompt)
             content.append(Image.open(screenshots[0]))
         else:
-            prompt = f"""Based on these Minecraft events: {minecraft_context}
+            # Check for repetitive activity
+            repetition_context = ""
+            if is_repetitive:
+                repetition_context = f"""
 
-Generate ONE sentence of funny, sarcastic sports-commentator-style narration about what's happening.
-Then suggest ONE sound effect keyword that would be funny with this narration.
+IMPORTANT: The player has been doing '{activity_mode}' repeatedly! Instead of normal narration, pick ONE of these special modes:
+1. SING: Make up a short silly song about their repetitive behavior (2 lines max)
+2. THERAPY: Act like their therapist, asking why they keep doing this
+3. DAD JOKE: Tell a dad joke related to their activity, then roast them with it
+4. FUN FACT: Share a fun fact, then use it to roast them (e.g., "Did you know pigs don't shower? Does that make you a pig?")
+
+Be creative and mean in a funny way, this is where you show your empathy, but you still dont hold back invasive comments!"""
+            
+            prompt = f"""Based on these Minecraft events: {minecraft_context}{repetition_context}
+
+Generate ONE sentence of funny, sarcastic sports-commentator-style narration.
+Then suggest ONE sound effect keyword.
 
 Respond in JSON format:
 {{"narration": "your funny narration here", "sfx_keyword": "keyword"}}
@@ -273,7 +288,8 @@ Sound effect keywords: bruh, laugh, explosion, wow, scream, crash, fail, epic, o
             data = json.loads(response_text)
             narration = data.get("narration", response_text)
             sfx_keyword = data.get("sfx_keyword", "bruh")
-            print(f"✅ Parsed JSON - narration: {narration[:50]}..., sfx_keyword: {sfx_keyword}")
+            
+            print(f"✅ Parsed JSON - narration: {narration[:50]}..., sfx: {sfx_keyword}")
         except json.JSONDecodeError as e:
             # Fallback if JSON parsing fails
             print(f"⚠️  JSON parse failed: {e}, using fallback")
@@ -301,7 +317,7 @@ Sound effect keywords: bruh, laugh, explosion, wow, scream, crash, fail, epic, o
                         "narration": narration,
                         "sfx": {
                             "title": sfx.get("title", "Unknown"),
-                            "mp3": sfx.get("mp3", ""),  # Fixed: was 'sound', now 'mp3'
+                            "mp3": sfx.get("mp3", ""),
                             "query": sfx_keyword
                         }
                     }
