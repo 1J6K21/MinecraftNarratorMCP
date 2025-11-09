@@ -5,7 +5,7 @@ A fun MCP server that takes screenshots, describes what changed, generates hilar
 ## Datathon2025
 We made this product in Texas A&M's DATATHON 2025 - A hackathon with the focus of AI, ML, Computer Science, Data Science, and Statistics!
 <br></br>
-### Contributers:
+### Contributors:
 ### Jonathan Kalsky '29 (CS):
 
 www.linkedin.com/in/jonathan-kalsky
