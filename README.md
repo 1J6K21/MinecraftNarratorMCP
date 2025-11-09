@@ -3,7 +3,13 @@
 A fun MCP server that takes screenshots, describes what changed, generates hilarious narration, and plays it back as audio!
 
 ## Features
-
+### Connected to the simultaneously programmed Minecraft Mod that updates a the HTTP port with data
+- View: https://github.com/nianjindev/MinecraftMCPSender
+### There is a UI to view the data on the port. To host the UI, run: 
+```
+python3 minecraft_receiver.py
+```
+### Otherwise
 - **Get Screenshot**: Retrieves the last two screenshots from a directory
 - **Describe**: Uses Gemini to analyze screenshots and describe changes
 - **Narrate**: Generates funny, sarcastic narration about what you're doing
