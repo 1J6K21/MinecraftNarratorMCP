@@ -26,12 +26,12 @@ SCREENSHOT_DIR.mkdir(exist_ok=True)
 MINECRAFT_DATA_FILE = SCREENSHOT_DIR / "minecraft_data.json"
 CHECK_INTERVAL = 2  # Check for new events every 2 seconds
 
-# Global state for batching narrations
-narration_queue = []  # Now stores dicts with {narration, sfx}
-audio_queue = []  # Separate queue for generated audio ready to play
+# Global state for pipeline
+event_queue = []  # Raw events waiting to be narrated
+audio_queue = []  # Generated audio ready to play
 is_playing_audio = False
 is_generating_narration = False  # Singleton flag: only one generation at a time
-queue_lock = threading.Lock()
+event_lock = threading.Lock()
 audio_lock = threading.Lock()
 
 def download_sfx(mp3_url: str, filename: str) -> Path:
@@ -133,63 +133,6 @@ def play_audio(audio_file: Path, max_duration: float = None):
             except FileNotFoundError:
                 continue
 
-async def generate_narration_from_minecraft():
-    """Generate narration from Minecraft events only"""
-    python_cmd = "python" if platform.system() == "Windows" else "python3"
-    
-    server_params = StdioServerParameters(
-        command=python_cmd,
-        args=["mcp_server.py"],
-        env={
-            **os.environ,
-            "SCREENSHOT_DIR": str(SCREENSHOT_DIR),
-        }
-    )
-    
-    try:
-        async with stdio_client(server_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                
-                # Load Minecraft data
-                if not MINECRAFT_DATA_FILE.exists():
-                    return
-                
-                with open(MINECRAFT_DATA_FILE, 'r') as f:
-                    minecraft_data = f.read()
-                
-                # Update MCP with Minecraft data
-                await session.call_tool("get_minecraft_input", {
-                    "minecraft_data": minecraft_data
-                })
-                
-                # Generate narration directly from Minecraft events (no screenshots)
-                # This now returns JSON with narration + SFX info
-                result = await session.call_tool("describe_for_narration", {
-                    "image_count": 0,  # No screenshots
-                    "include_minecraft": True
-                })
-                
-                # Parse JSON response
-                response_data = json.loads(result.content[0].text)
-                narration = response_data["narration"]
-                sfx_info = response_data.get("sfx")
-                
-                # Add to queue with SFX info
-                with queue_lock:
-                    narration_queue.append({
-                        "narration": narration,
-                        "sfx": sfx_info
-                    })
-                    sfx_text = f" (SFX: {sfx_info['query']})" if sfx_info else ""
-                    print(f"📝 Narration queued ({len(narration_queue)} in queue): {narration[:50]}...{sfx_text}")
-    except KeyboardInterrupt:
-        raise
-    except Exception as e:
-        # Suppress process termination errors - they're expected during cleanup
-        if "Process group termination" not in str(e) and "TaskGroup" not in str(e):
-            print(f"❌ Error generating narration: {e}")
-
 async def generate_audio_file(batch_narrations):
     """Generate audio file from narrations"""
     python_cmd = "python" if platform.system() == "Windows" else "python3"
@@ -231,7 +174,7 @@ async def generate_audio_file(batch_narrations):
         return None
 
 async def minecraft_event_loop():
-    """Monitor Minecraft events and add them to queue"""
+    """Monitor Minecraft events and add them to event queue"""
     last_timestamp = None
     
     while True:
@@ -252,12 +195,13 @@ async def minecraft_event_loop():
                 latest_event = events[-1]  # Last event is newest
                 current_timestamp = latest_event.get('timestamp')
                 
-                # If timestamp changed, we have new events - add to queue immediately
+                # If timestamp changed, add event to queue (don't generate yet)
                 if current_timestamp != last_timestamp:
                     print(f"🎮 New event: {latest_event.get('event_type')} - {latest_event.get('event_source')}")
                     
-                    # Queue the narration generation immediately
-                    asyncio.create_task(generate_narration_from_minecraft())
+                    with event_lock:
+                        event_queue.append(latest_event)
+                    
                     last_timestamp = current_timestamp
                         
             except Exception as e:
@@ -269,57 +213,84 @@ async def minecraft_event_loop():
         await asyncio.sleep(CHECK_INTERVAL)
 
 async def generate_audio_pipeline():
-    """Pipeline: Generate audio from narrations while previous audio plays"""
+    """Pipeline: Batch events and generate audio while previous audio plays"""
     global is_generating_narration
     
     while True:
-        # Wait if no narrations queued OR already generating (singleton)
-        if not narration_queue or is_generating_narration:
+        # Wait if no events queued OR already generating (singleton)
+        if not event_queue or is_generating_narration:
             await asyncio.sleep(0.5)
             continue
         
         # Set singleton flag - only one generation at a time
         is_generating_narration = True
         
-        # Get ALL queued narrations
-        with queue_lock:
-            if not narration_queue:
+        # Get ALL queued events and generate ONE narration from them
+        with event_lock:
+            if not event_queue:
                 is_generating_narration = False
                 continue
-            batch_items = narration_queue.copy()
-            narration_queue.clear()
-        
-        # Extract narrations and get first SFX (they should all be similar)
-        batch_narrations = [item["narration"] for item in batch_items]
-        sfx_info = batch_items[0].get("sfx") if batch_items else None
+            batch_events = event_queue.copy()
+            event_queue.clear()
         
         print(f"\n{'='*50}")
-        print(f"🎤 Generating audio for {len(batch_narrations)} narration(s)...")
-        if sfx_info:
-            print(f"🎵 SFX selected: {sfx_info['title']} ({sfx_info['query']})")
+        print(f"🎤 Generating narration for {len(batch_events)} event(s)...")
         print(f"{'='*50}")
         
-        # Generate audio (this happens in parallel with playback)
-        audio_path = await generate_audio_file(batch_narrations)
+        # Generate single narration from all batched events
+        python_cmd = "python" if platform.system() == "Windows" else "python3"
+        server_params = StdioServerParameters(
+            command=python_cmd,
+            args=["mcp_server.py"],
+            env={**os.environ, "SCREENSHOT_DIR": str(SCREENSHOT_DIR)}
+        )
         
-        # Download sound effect if available
-        sfx_path = None
-        if sfx_info:
-            print(f"📥 Downloading SFX: {sfx_info['title']}")
-            sfx_path = download_sfx(sfx_info['mp3'], f"sfx_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3")
+        try:
+            async with stdio_client(server_params) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    
+                    # Load current Minecraft data
+                    with open(MINECRAFT_DATA_FILE, 'r') as f:
+                        minecraft_data = f.read()
+                    
+                    await session.call_tool("get_minecraft_input", {"minecraft_data": minecraft_data})
+                    
+                    # Generate ONE narration for all events
+                    result = await session.call_tool("describe_for_narration", {
+                        "image_count": 0,
+                        "include_minecraft": True
+                    })
+                    
+                    response_data = json.loads(result.content[0].text)
+                    narration = response_data["narration"]
+                    sfx_info = response_data.get("sfx")
+                    
+                    print(f"📝 Narration: {narration[:80]}...")
+                    if sfx_info:
+                        print(f"🎵 SFX: {sfx_info['title']}")
+                    
+                    # Generate audio
+                    audio_filename = f"narration_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
+                    await session.call_tool("tts", {"text": narration, "output_file": audio_filename})
+                    audio_path = SCREENSHOT_DIR / audio_filename
+                    
+                    # Download SFX
+                    sfx_path = None
+                    if sfx_info:
+                        sfx_path = download_sfx(sfx_info['mp3'], f"sfx_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3")
+                    
+                    # Add to audio queue
+                    if audio_path.exists():
+                        with audio_lock:
+                            audio_queue.append({"audio_path": audio_path, "sfx_path": sfx_path})
+                        print(f"✅ Audio ready ({len(audio_queue)} in queue)")
+                    
+        except Exception as e:
+            if "Process group termination" not in str(e):
+                print(f"❌ Error: {e}")
         
-        # Add to audio queue for playback
-        if audio_path and audio_path.exists():
-            with audio_lock:
-                audio_queue.append({
-                    "audio_path": audio_path,
-                    "sfx_path": sfx_path
-                })
-            print(f"✅ Audio ready for playback ({len(audio_queue)} in queue)")
-        else:
-            print(f"⚠️  Audio generation failed")
-        
-        # Release singleton flag - allow next generation
+        # Release singleton flag
         is_generating_narration = False
 
 async def play_audio_pipeline():
