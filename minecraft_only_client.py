@@ -26,6 +26,13 @@ SCREENSHOT_DIR.mkdir(exist_ok=True)
 MINECRAFT_DATA_FILE = SCREENSHOT_DIR / "minecraft_data.json"
 CHECK_INTERVAL = 2  # Check for new events every 2 seconds
 
+# Configuration
+EXPLICIT = True  # Set to False for family-friendly mode
+
+# Cooldown audio paths
+COOLDOWN_AUDIO_EXPLICIT = Path("./Resources/CoolDownAudios/CoolDown_explicit.mp3")
+COOLDOWN_AUDIO_NICE = Path("./Resources/CoolDownAudios/CoolDown_nice.mp3")
+
 # Global state for pipeline
 event_queue = []  # Raw events waiting to be narrated
 audio_queue = []  # Generated audio ready to play
@@ -245,6 +252,8 @@ async def generate_audio_pipeline():
             env={**os.environ, "SCREENSHOT_DIR": str(SCREENSHOT_DIR)}
         )
         
+        rate_limited = False
+        
         try:
             async with stdio_client(server_params) as (read, write):
                 async with ClientSession(read, write) as session:
@@ -266,29 +275,49 @@ async def generate_audio_pipeline():
                     narration = response_data["narration"]
                     sfx_info = response_data.get("sfx")
                     
-                    print(f"📝 Narration: {narration[:80]}...")
-                    if sfx_info:
-                        print(f"🎵 SFX: {sfx_info['title']}")
-                    
-                    # Generate audio
-                    audio_filename = f"narration_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
-                    await session.call_tool("tts", {"text": narration, "output_file": audio_filename})
-                    audio_path = SCREENSHOT_DIR / audio_filename
-                    
-                    # Download SFX
-                    sfx_path = None
-                    if sfx_info:
-                        sfx_path = download_sfx(sfx_info['mp3'], f"sfx_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3")
-                    
-                    # Add to audio queue
-                    if audio_path.exists():
-                        with audio_lock:
-                            audio_queue.append({"audio_path": audio_path, "sfx_path": sfx_path})
-                        print(f"✅ Audio ready ({len(audio_queue)} in queue)")
+                    # Check for rate limit in narration response
+                    if "429" in narration or "quota exceeded" in narration.lower() or "rate limit" in narration.lower():
+                        print("⏱️  Rate limit detected - playing cooldown audio")
+                        rate_limited = True
+                    else:
+                        print(f"📝 Narration: {narration[:80]}...")
+                        if sfx_info:
+                            print(f"🎵 SFX: {sfx_info['title']}")
+                        
+                        # Generate audio
+                        audio_filename = f"narration_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3"
+                        await session.call_tool("tts", {"text": narration, "output_file": audio_filename})
+                        audio_path = SCREENSHOT_DIR / audio_filename
+                        
+                        # Download SFX
+                        sfx_path = None
+                        if sfx_info:
+                            sfx_path = download_sfx(sfx_info['mp3'], f"sfx_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3")
+                        
+                        # Add to audio queue
+                        if audio_path.exists():
+                            with audio_lock:
+                                audio_queue.append({"audio_path": audio_path, "sfx_path": sfx_path})
+                            print(f"✅ Audio ready ({len(audio_queue)} in queue)")
                     
         except Exception as e:
-            if "Process group termination" not in str(e):
+            error_str = str(e)
+            # Check if it's a rate limit error
+            if "429" in error_str or "quota exceeded" in error_str.lower() or "rate limit" in error_str.lower():
+                print("⏱️  Rate limit detected - playing cooldown audio")
+                rate_limited = True
+            elif "Process group termination" not in error_str:
                 print(f"❌ Error: {e}")
+        
+        # Play cooldown audio if rate limited
+        if rate_limited:
+            cooldown_audio = COOLDOWN_AUDIO_EXPLICIT if EXPLICIT else COOLDOWN_AUDIO_NICE
+            if cooldown_audio.exists():
+                with audio_lock:
+                    audio_queue.append({"audio_path": cooldown_audio, "sfx_path": None})
+                print(f"🔊 Cooldown audio queued")
+            else:
+                print(f"⚠️  Cooldown audio not found: {cooldown_audio}")
         
         # Release singleton flag
         is_generating_narration = False
