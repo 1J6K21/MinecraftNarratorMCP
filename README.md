@@ -5,9 +5,10 @@ A fun MCP server that takes screenshots, describes what changed, generates hilar
 ## Features
 
 - **Get Screenshot**: Retrieves the last two screenshots from a directory
-- **Describe**: Uses Claude to analyze screenshots and describe changes
+- **Describe**: Uses Gemini to analyze screenshots and describe changes
 - **Narrate**: Generates funny, sarcastic narration about what you're doing
-- **TTS**: Converts narration to speech with OpenAI's TTS API
+- **Sound Effects**: Automatically adds comedic sound effects from MyInstants API
+- **TTS**: Converts narration to speech with ElevenLabs TTS
 - **Auto-cleanup**: Only keeps the last 5 screenshots
 
 ## Setup
@@ -114,13 +115,25 @@ You can also use this as an MCP server in Kiro or other MCP clients:
 }
 ```
 
+### Available MCP Tools
+
+- **get_screenshot**: Get the last N screenshots
+- **get_minecraft_input**: Receive Minecraft gameplay events
+- **describe**: Analyze screenshots and/or Minecraft data
+- **narrate**: Generate funny narration from a description
+- **describe_for_narration**: Combined tool (faster) - analyze and narrate in one step
+- **summarize_narrations**: Combine multiple narrations into one sentence
+- **get_sfx**: Search for sound effects from MyInstants API
+- **tts**: Convert text to speech with ElevenLabs
+
 ## How It Works
 
 1. **Screenshots**: Uses macOS `screencapture` to grab screenshots
-2. **Analysis**: Gemini 1.5 Flash analyzes images and describes changes (fast & free!)
+2. **Analysis**: Gemini 2.5 Flash analyzes images and describes changes (fast & free!)
 3. **Narration**: Gemini generates sarcastic commentary
-4. **Speech**: ElevenLabs TTS converts text to audio with high-quality voice
-5. **Playback**: macOS `afplay` plays the audio
+4. **Sound Effects**: MCP server automatically analyzes narration keywords and selects appropriate SFX from MyInstants API
+5. **Speech**: ElevenLabs TTS converts text to audio with high-quality voice
+6. **Playback**: Plays sound effect and narration audio in parallel for perfect timing
 
 ## Example Output
 
@@ -145,12 +158,20 @@ ancient wisdom of strangers on the internet. Truly magnificent.
 🔊 Playing audio: screenshots/narration_20251108_143030.mp3
 ```
 
+## Documentation
+
+- **[QUICKSTART_SFX.md](QUICKSTART_SFX.md)**: Quick start guide for sound effects (3 minutes!)
+- **[SFX_INTEGRATION.md](SFX_INTEGRATION.md)**: Complete guide to the sound effects system
+- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)**: Technical implementation details
+- **[myinstants-api/README.md](myinstants-api/README.md)**: MyInstants API documentation
+
 ## Notes
 
 - **Cross-platform**: Works on macOS, Windows, and Linux
 - Costs: Gemini is FREE + ElevenLabs has 10k chars/month free tier
 - Gemini 2.5 Flash is super fast for vision tasks
 - ElevenLabs voices are incredibly realistic and expressive
+- MyInstants API provides free sound effects
 - Press Ctrl+C to stop the client
 
 ### Platform-specific details:
@@ -159,8 +180,42 @@ ancient wisdom of strangers on the internet. Truly magnificent.
 - **Windows**: Uses PIL for screenshots and pygame for audio
 - **Linux**: Uses `scrot`/`gnome-screenshot` for screenshots, various audio players
 
+## License & Attribution
+
+This project uses sound effects from:
+- **MyInstants API** by abdiputranar: https://github.com/abdipr/myinstants-api
+- **MyInstants.com**: https://www.myinstants.com
+
+Sound effects are obtained via web scraping from MyInstants.com. This project:
+- Provides proper attribution to the MyInstants API and MyInstants.com
+- Is used for non-commercial, educational, and entertainment purposes only
+- Complies with the MyInstants API usage requirements
+- Does not abuse the API for personal commercial benefits
+
+If you use this project, please maintain this attribution and follow the same guidelines.
+
 ## Customization
 
 - Change `INTERVAL` in `screenshot_client.py` to adjust screenshot frequency
 - Modify the narration prompt in `mcp_server.py` for different comedy styles
 - Change TTS voice in `mcp_server.py` (ElevenLabs voices: Adam, Antoni, Arnold, Bella, Domi, Elli, Josh, Rachel, Sam, and more)
+- Customize SFX selection logic in the `get_sfx_for_narration()` function to match different keywords
+
+## Sound Effects
+
+The system automatically adds comedic sound effects from the MyInstants API based on narration content:
+
+- **"bruh"** sound for failures, deaths, or damage
+- **"laugh"** sound for funny or hilarious moments
+- **"explosion"** sound for TNT, explosions, or boom events
+- **"wow"** sound for amazing or incredible achievements
+
+Sound effects play in parallel with narration for perfect comedic timing!
+
+### Credits
+
+Sound effects are provided by:
+- **MyInstants API**: https://github.com/abdipr/myinstants-api (by abdiputranar)
+- **MyInstants.com**: https://www.myinstants.com (original sound library)
+
+Sounds are obtained via web scraping from MyInstants.com. This project complies with the API's usage requirements by providing proper attribution and is used for non-commercial, educational purposes only.

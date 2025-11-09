@@ -11,6 +11,8 @@ import subprocess
 import platform
 import asyncio
 import threading
+import json
+import requests
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
@@ -25,9 +27,27 @@ MINECRAFT_DATA_FILE = SCREENSHOT_DIR / "minecraft_data.json"
 CHECK_INTERVAL = 2  # Check for new events every 2 seconds
 
 # Global state for batching narrations
-narration_queue = []
+narration_queue = []  # Now stores dicts with {narration, sfx}
 is_playing_audio = False
 queue_lock = threading.Lock()
+
+def download_sfx(mp3_url: str, filename: str) -> Path:
+    """
+    Download sound effect from URL.
+    
+    Sound effects provided by MyInstants API (https://github.com/abdipr/myinstants-api)
+    Sounds sourced from MyInstants.com. Used with attribution for non-commercial purposes.
+    """
+    sfx_path = SCREENSHOT_DIR / filename
+    try:
+        response = requests.get(mp3_url, timeout=10)
+        response.raise_for_status()
+        with open(sfx_path, 'wb') as f:
+            f.write(response.content)
+        return sfx_path
+    except Exception as e:
+        print(f"⚠️  Failed to download SFX: {e}")
+        return None
 
 def play_audio(audio_file: Path):
     """Play audio file (cross-platform, no window on Windows)"""
@@ -98,16 +118,25 @@ async def generate_narration_from_minecraft():
                 })
                 
                 # Generate narration directly from Minecraft events (no screenshots)
+                # This now returns JSON with narration + SFX info
                 result = await session.call_tool("describe_for_narration", {
                     "image_count": 0,  # No screenshots
                     "include_minecraft": True
                 })
-                narration = result.content[0].text
                 
-                # Add to queue
+                # Parse JSON response
+                response_data = json.loads(result.content[0].text)
+                narration = response_data["narration"]
+                sfx_info = response_data.get("sfx")
+                
+                # Add to queue with SFX info
                 with queue_lock:
-                    narration_queue.append(narration)
-                    print(f"📝 Narration queued ({len(narration_queue)} in queue): {narration[:50]}...")
+                    narration_queue.append({
+                        "narration": narration,
+                        "sfx": sfx_info
+                    })
+                    sfx_text = f" (SFX: {sfx_info['query']})" if sfx_info else ""
+                    print(f"📝 Narration queued ({len(narration_queue)} in queue): {narration[:50]}...{sfx_text}")
                 
     except Exception as e:
         print(f"❌ Error generating narration: {e}")
@@ -192,22 +221,50 @@ async def process_audio_queue():
         with queue_lock:
             if not narration_queue:
                 continue
-            batch_narrations = narration_queue.copy()
+            batch_items = narration_queue.copy()
             narration_queue.clear()
+        
+        # Extract narrations and get first SFX (they should all be similar)
+        batch_narrations = [item["narration"] for item in batch_items]
+        sfx_info = batch_items[0].get("sfx") if batch_items else None
         
         print(f"\n{'='*50}")
         print(f"🎤 Summarizing {len(batch_narrations)} narration(s) into one sentence...")
+        if sfx_info:
+            print(f"🎵 SFX selected: {sfx_info['title']} ({sfx_info['query']})")
         print(f"{'='*50}")
         
         # Generate audio
         is_playing_audio = True
         audio_path = await generate_audio_file(batch_narrations)
         
+        # Download sound effect if available
+        sfx_path = None
+        if sfx_info:
+            print(f"📥 Downloading SFX: {sfx_info['title']}")
+            sfx_path = download_sfx(sfx_info['mp3'], f"sfx_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3")
+        
         if audio_path and audio_path.exists():
             try:
-                print(f"🎵 Starting audio playback...")
-                await asyncio.to_thread(play_audio, audio_path)
-                print(f"✅ Audio playback completed")
+                # Play both audio files in parallel for faster playback
+                if sfx_path and sfx_path.exists():
+                    print(f"🎵 Playing sound effect + narration...")
+                    
+                    # Start both audio files in parallel
+                    sfx_task = asyncio.create_task(asyncio.to_thread(play_audio, sfx_path))
+                    
+                    # Small delay so SFX starts first, then start narration
+                    await asyncio.sleep(0.1)
+                    narration_task = asyncio.create_task(asyncio.to_thread(play_audio, audio_path))
+                    
+                    # Wait for both to complete
+                    await asyncio.gather(sfx_task, narration_task)
+                    print(f"✅ Audio playback completed")
+                else:
+                    # No SFX, just play narration
+                    print(f"🎵 Playing narration...")
+                    await asyncio.to_thread(play_audio, audio_path)
+                    print(f"✅ Audio playback completed")
             except Exception as e:
                 print(f"❌ Error playing audio: {e}")
                 import traceback
@@ -252,11 +309,13 @@ async def main():
     print(f"📁 Data directory: {SCREENSHOT_DIR}")
     print(f"⏱️  Checking for Minecraft events every {CHECK_INTERVAL} seconds")
     print("📝 No screenshots - Minecraft events only!")
+    print("\n🎵 Sound Effects: MyInstants API (https://github.com/abdipr/myinstants-api)")
+    print("   Sounds from MyInstants.com - Used with attribution")
     
     # Start Minecraft receiver automatically
     receiver_process = start_minecraft_receiver()
     
-    print("Press Ctrl+C to stop\n")
+    print("\nPress Ctrl+C to stop\n")
     
     try:
         # Run both loops concurrently

@@ -2,6 +2,11 @@
 """
 Screenshot Narrator MCP Server
 Takes screenshots, describes changes, generates funny narration, and converts to speech
+
+Sound Effects Attribution:
+- MyInstants API: https://github.com/abdipr/myinstants-api (by abdiputranar)
+- MyInstants.com: https://www.myinstants.com
+Sounds obtained via web scraping. Used with attribution for non-commercial purposes.
 """
 
 import os
@@ -17,6 +22,7 @@ import mcp.server.stdio
 from PIL import Image
 import subprocess
 from elevenlabs import ElevenLabs
+import requests
 
 # Initialize clients
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -47,6 +53,26 @@ def cleanup_old_audio():
     while len(audio_files) > 2:
         oldest = audio_files.pop(0)
         oldest.unlink()
+
+def get_sfx_query_from_narration(narration: str) -> str:
+    """
+    Determine appropriate SFX query based on narration keywords.
+    
+    Sound effects provided by MyInstants API (https://github.com/abdipr/myinstants-api)
+    Sounds sourced from MyInstants.com via web scraping.
+    """
+    narration_lower = narration.lower()
+    
+    if any(word in narration_lower for word in ["laugh", "funny", "hilarious", "joke", "laughing"]):
+        return "laugh"
+    elif any(word in narration_lower for word in ["fail", "died", "death", "damage", "falling", "fell"]):
+        return "bruh"
+    elif any(word in narration_lower for word in ["explosion", "explode", "exploded", "boom", "tnt", "blew"]):
+        return "explosion"
+    elif any(word in narration_lower for word in ["wow", "amazing", "incredible", "genius", "brilliant"]):
+        return "wow"
+    else:
+        return "bruh"  # default
 
 def get_last_screenshots(count: int = 2):
     """Get the last N screenshots from the directory"""
@@ -118,7 +144,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="describe_for_narration",
-            description="Combined tool: analyzes screenshots/Minecraft data and generates narration in one step (faster)",
+            description="Combined tool: analyzes screenshots/Minecraft data, generates narration, and automatically selects appropriate sound effect. Returns JSON with narration and SFX info.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -148,6 +174,25 @@ async def list_tools() -> list[Tool]:
                     }
                 },
                 "required": ["narrations"]
+            }
+        ),
+        Tool(
+            name="get_sfx",
+            description="Search for sound effects from MyInstants API and return MP3 URLs",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query for sound effect (e.g., 'laugh', 'explosion', 'bruh')"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return (default: 3)",
+                        "default": 3
+                    }
+                },
+                "required": ["query"]
             }
         ),
         Tool(
@@ -341,7 +386,50 @@ Generate ONE SHORT sentence of funny, sarcastic narration. Be a sports commentat
         
         response = gemini_model.generate_content(content)
         narration = response.text
-        return [TextContent(type="text", text=narration)]
+        
+        # Automatically get appropriate SFX based on narration
+        # Using MyInstants API: https://github.com/abdipr/myinstants-api
+        # Sounds from MyInstants.com (used with attribution for non-commercial purposes)
+        sfx_query = get_sfx_query_from_narration(narration)
+        
+        try:
+            # Search for sound effect
+            sfx_response = requests.get(
+                "https://myinstants-api.vercel.app/search",
+                params={"q": sfx_query},
+                timeout=10
+            )
+            sfx_response.raise_for_status()
+            sfx_data = sfx_response.json()
+            
+            # Get the first sound effect
+            if "data" in sfx_data and sfx_data["data"]:
+                sfx_info = sfx_data["data"][0]
+                # Return narration with SFX info as JSON
+                result = {
+                    "narration": narration,
+                    "sfx": {
+                        "title": sfx_info.get("title", "Unknown"),
+                        "mp3": sfx_info.get("mp3", ""),
+                        "url": sfx_info.get("url", ""),
+                        "query": sfx_query
+                    }
+                }
+                return [TextContent(type="text", text=json.dumps(result))]
+            else:
+                # No SFX found, return just narration
+                result = {
+                    "narration": narration,
+                    "sfx": None
+                }
+                return [TextContent(type="text", text=json.dumps(result))]
+        except Exception as e:
+            # If SFX lookup fails, return just narration
+            result = {
+                "narration": narration,
+                "sfx": None
+            }
+            return [TextContent(type="text", text=json.dumps(result))]
     
     elif name == "summarize_narrations":
         narrations = arguments["narrations"]
@@ -364,6 +452,37 @@ ONE SENTENCE ONLY that captures everything important."""
         response = gemini_model.generate_content(prompt)
         summary = response.text
         return [TextContent(type="text", text=summary)]
+    
+    elif name == "get_sfx":
+        query = arguments["query"]
+        limit = arguments.get("limit", 3)
+        
+        try:
+            # Search MyInstants API
+            response = requests.get(
+                "https://myinstants-api.vercel.app/search",
+                params={"q": query},
+                timeout=10
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            # Extract sound effects (API uses "data" key)
+            if "data" in data and data["data"]:
+                sounds = data["data"][:limit]
+                result = []
+                for sound in sounds:
+                    result.append({
+                        "title": sound.get("title", "Unknown"),
+                        "mp3": sound.get("mp3", ""),
+                        "url": sound.get("url", "")
+                    })
+                return [TextContent(type="text", text=json.dumps(result, indent=2))]
+            else:
+                return [TextContent(type="text", text=f"No sound effects found for: {query}")]
+                
+        except Exception as e:
+            return [TextContent(type="text", text=f"Error searching sound effects: {str(e)}")]
     
     elif name == "tts":
         text = arguments["text"]
