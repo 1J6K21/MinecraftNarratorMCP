@@ -25,16 +25,14 @@ SCREENSHOT_DIR = Path(os.getenv("SCREENSHOT_DIR", "./screenshots"))
 SCREENSHOT_DIR.mkdir(exist_ok=True)
 MINECRAFT_DATA_FILE = SCREENSHOT_DIR / "minecraft_data.json"
 CHECK_INTERVAL = 2  # Check for new events every 2 seconds
-BATCH_WAIT_TIME = 5  # Wait 5 seconds to batch multiple events before narrating
-MIN_NARRATION_INTERVAL = 3  # Minimum 3 seconds between narration requests (RPM control)
 
 # Global state for batching narrations
 narration_queue = []  # Now stores dicts with {narration, sfx}
 audio_queue = []  # Separate queue for generated audio ready to play
 is_playing_audio = False
+is_generating_narration = False  # Singleton flag: only one generation at a time
 queue_lock = threading.Lock()
 audio_lock = threading.Lock()
-last_narration_time = 0  # Track last narration request for rate limiting
 
 def download_sfx(mp3_url: str, filename: str) -> Path:
     """
@@ -233,11 +231,8 @@ async def generate_audio_file(batch_narrations):
         return None
 
 async def minecraft_event_loop():
-    """Monitor Minecraft events and batch them before narrating"""
-    global last_narration_time
+    """Monitor Minecraft events and add them to queue"""
     last_timestamp = None
-    pending_events = []
-    last_event_time = None
     
     while True:
         # Check if Minecraft data file exists and has new events
@@ -250,7 +245,6 @@ async def minecraft_event_loop():
                 if not events:
                     # Reset timestamp when events are empty - stay silent
                     last_timestamp = None
-                    pending_events.clear()
                     await asyncio.sleep(CHECK_INTERVAL)
                     continue
                 
@@ -258,46 +252,39 @@ async def minecraft_event_loop():
                 latest_event = events[-1]  # Last event is newest
                 current_timestamp = latest_event.get('timestamp')
                 
-                # If timestamp changed, we have new events
+                # If timestamp changed, we have new events - add to queue immediately
                 if current_timestamp != last_timestamp:
                     print(f"🎮 New event: {latest_event.get('event_type')} - {latest_event.get('event_source')}")
-                    pending_events.append(latest_event)
-                    last_timestamp = current_timestamp
-                    last_event_time = time.time()
-                
-                # Check if we should process batched events
-                if pending_events and last_event_time:
-                    time_since_last_event = time.time() - last_event_time
-                    time_since_last_narration = time.time() - last_narration_time
                     
-                    # Process if: waited long enough AND respecting rate limit
-                    if time_since_last_event >= BATCH_WAIT_TIME and time_since_last_narration >= MIN_NARRATION_INTERVAL:
-                        print(f"📦 Batching {len(pending_events)} event(s) for narration")
-                        asyncio.create_task(generate_narration_from_minecraft())
-                        last_narration_time = time.time()
-                        pending_events.clear()
-                        last_event_time = None
+                    # Queue the narration generation immediately
+                    asyncio.create_task(generate_narration_from_minecraft())
+                    last_timestamp = current_timestamp
                         
             except Exception as e:
                 print(f"⚠️  Error reading events: {e}")
         else:
             # Reset timestamp if file doesn't exist
             last_timestamp = None
-            pending_events.clear()
         
         await asyncio.sleep(CHECK_INTERVAL)
 
 async def generate_audio_pipeline():
     """Pipeline: Generate audio from narrations while previous audio plays"""
+    global is_generating_narration
+    
     while True:
-        # Wait if no narrations queued
-        if not narration_queue:
+        # Wait if no narrations queued OR already generating (singleton)
+        if not narration_queue or is_generating_narration:
             await asyncio.sleep(0.5)
             continue
+        
+        # Set singleton flag - only one generation at a time
+        is_generating_narration = True
         
         # Get ALL queued narrations
         with queue_lock:
             if not narration_queue:
+                is_generating_narration = False
                 continue
             batch_items = narration_queue.copy()
             narration_queue.clear()
@@ -331,6 +318,9 @@ async def generate_audio_pipeline():
             print(f"✅ Audio ready for playback ({len(audio_queue)} in queue)")
         else:
             print(f"⚠️  Audio generation failed")
+        
+        # Release singleton flag - allow next generation
+        is_generating_narration = False
 
 async def play_audio_pipeline():
     """Pipeline: Play audio as soon as it's ready"""
