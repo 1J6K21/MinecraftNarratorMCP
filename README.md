@@ -36,6 +36,9 @@ cp .env.example .env
    - Gemini API key: https://aistudio.google.com/app/apikey (FREE!)
    - ElevenLabs API key: https://elevenlabs.io/app/settings/api-keys (10k chars/month free)
 
+4. In config/mcp/servers.json:
+   - You may need to switch "Python3" to "Python" in the command field
+
 ## Usage
 
 ### Run the Client

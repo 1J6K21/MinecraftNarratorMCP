@@ -40,7 +40,6 @@ def receive_minecraft_event():
         
         event_type = data.get('parameters').get('event')
         event_source = data.get('parameters').get('source')
-
         
         # Create event record
         event = {

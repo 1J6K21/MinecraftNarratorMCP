@@ -1,0 +1,10 @@
+{
+    "servers": {
+        "minecraft-narrator": {
+            "command": "/usr/bin/python3",
+            "args": [
+                "../../mcp_server.py"
+            ]
+        }
+    }
+}
