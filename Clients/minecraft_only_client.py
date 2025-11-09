@@ -28,6 +28,7 @@ CHECK_INTERVAL = 2  # Check for new events every 2 seconds
 
 # Configuration
 EXPLICIT = True  # Set to False for family-friendly mode
+MIN_BATCH_SIZE = 5  # Minimum events before generating narration
 
 # Cooldown audio paths
 COOLDOWN_AUDIO_EXPLICIT = Path("./Resources/CoolDownAudios/CoolDown_explicit.mp3")
@@ -250,8 +251,15 @@ async def generate_audio_pipeline():
     global is_generating_narration
     
     while True:
-        # Wait if no events queued OR already generating (singleton)
-        if not event_queue or is_generating_narration:
+        # Wait if not enough events OR already generating (singleton)
+        current_queue_size = len(event_queue)
+        if current_queue_size < MIN_BATCH_SIZE:
+            if current_queue_size > 0:
+                print(f"⏳ Waiting for more events ({current_queue_size}/{MIN_BATCH_SIZE})...")
+            await asyncio.sleep(0.5)
+            continue
+        
+        if is_generating_narration:
             await asyncio.sleep(0.5)
             continue
         
@@ -260,7 +268,7 @@ async def generate_audio_pipeline():
         
         # Get ALL queued events and generate ONE narration from them
         with event_lock:
-            if not event_queue:
+            if len(event_queue) < MIN_BATCH_SIZE:
                 is_generating_narration = False
                 continue
             batch_events = event_queue.copy()
