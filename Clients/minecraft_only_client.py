@@ -146,7 +146,7 @@ async def generate_audio_file(batch_narrations):
     
     server_params = StdioServerParameters(
         command=python_cmd,
-        args=["mcp_server.py"],
+        args=["../mcp_server.py"],
         env={
             **os.environ,
             "SCREENSHOT_DIR": str(SCREENSHOT_DIR),
@@ -248,7 +248,7 @@ async def generate_audio_pipeline():
         python_cmd = "python" if platform.system() == "Windows" else "python3"
         server_params = StdioServerParameters(
             command=python_cmd,
-            args=["mcp_server.py"],
+            args=["../mcp_server.py"],
             env={**os.environ, "SCREENSHOT_DIR": str(SCREENSHOT_DIR)}
         )
         
@@ -379,7 +379,7 @@ def start_minecraft_receiver():
         
         # Start receiver in background
         receiver_process = subprocess.Popen(
-            [python_cmd, "minecraft_receiver.py"],
+            [python_cmd, "../minecraft_receiver.py"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
         )

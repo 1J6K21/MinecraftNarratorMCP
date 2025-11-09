@@ -165,7 +165,7 @@ async def generate_narration(include_minecraft=False):
     
     server_params = StdioServerParameters(
         command=python_cmd,
-        args=["mcp_server.py"],
+        args=["../mcp_server.py"],
         env={
             **os.environ,
             "SCREENSHOT_DIR": str(SCREENSHOT_DIR),
@@ -249,7 +249,7 @@ async def process_audio_queue():
         
         server_params = StdioServerParameters(
             command=python_cmd,
-            args=["mcp_server.py"],
+            args=["../mcp_server.py"],
             env={
                 **os.environ,
                 "SCREENSHOT_DIR": str(SCREENSHOT_DIR),
@@ -320,7 +320,7 @@ def start_minecraft_receiver():
         
         # Start receiver in background
         receiver_process = subprocess.Popen(
-            [python_cmd, "minecraft_receiver.py"],
+            [python_cmd, "../minecraft_receiver.py"],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL
         )
