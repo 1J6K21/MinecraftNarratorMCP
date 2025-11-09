@@ -78,8 +78,13 @@ def download_sfx(mp3_url: str, filename: str) -> Path:
         print(f"⚠️  Failed to download SFX: {e}")
         return None
 
-def play_audio(audio_file: Path):
-    """Play audio file (cross-platform, no window on Windows)"""
+def play_audio(audio_file: Path, max_duration: float = None):
+    """Play audio file (cross-platform, no window on Windows)
+    
+    Args:
+        audio_file: Path to audio file
+        max_duration: Maximum duration in seconds (None = play full file)
+    """
     if not audio_file.exists():
         return
     
@@ -87,31 +92,69 @@ def play_audio(audio_file: Path):
     system = platform.system()
     
     if system == "Darwin":  # macOS
-        subprocess.run(["afplay", str(audio_file)])
-    elif system == "Windows":
-        # Use Windows Media Player command line (hidden, synchronous)
-        try:
-            # Use PowerShell to play MP3 with Windows Media Player (no window)
-            subprocess.run([
-                "powershell", "-WindowStyle", "Hidden", "-Command",
-                f"Add-Type -AssemblyName presentationCore; "
-                f"$mediaPlayer = New-Object System.Windows.Media.MediaPlayer; "
-                f"$mediaPlayer.Open('{audio_file.absolute()}'); "
-                f"$mediaPlayer.Play(); "
-                f"Start-Sleep -Seconds ([int]($mediaPlayer.NaturalDuration.TimeSpan.TotalSeconds + 1))"
-            ], check=True, creationflags=subprocess.CREATE_NO_WINDOW)
-        except:
-            # Fallback: use playsound
+        process = subprocess.Popen(["afplay", str(audio_file)])
+        if max_duration:
             try:
-                from playsound import playsound
-                playsound(str(audio_file), block=True)
+                process.wait(timeout=max_duration)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+                print(f"⏱️  Audio cut off after {max_duration}s")
+        else:
+            process.wait()
+    elif system == "Windows":
+        # Use ffplay with duration limit (hidden window)
+        try:
+            cmd = ["ffplay", "-nodisp", "-autoexit", str(audio_file)]
+            if max_duration:
+                cmd.extend(["-t", str(max_duration)])
+            
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            
+            if max_duration:
+                try:
+                    process.wait(timeout=max_duration + 1)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                    print(f"⏱️  Audio cut off after {max_duration}s")
+            else:
+                process.wait()
+        except FileNotFoundError:
+            # Fallback: use PowerShell with timeout
+            try:
+                timeout_cmd = f"-t {int(max_duration)}" if max_duration else ""
+                subprocess.run([
+                    "powershell", "-WindowStyle", "Hidden", "-Command",
+                    f"Add-Type -AssemblyName presentationCore; "
+                    f"$mediaPlayer = New-Object System.Windows.Media.MediaPlayer; "
+                    f"$mediaPlayer.Open('{audio_file.absolute()}'); "
+                    f"$mediaPlayer.Play(); "
+                    f"Start-Sleep -Seconds {int(max_duration) if max_duration else '([int]($mediaPlayer.NaturalDuration.TimeSpan.TotalSeconds + 1))'}"
+                ], check=True, creationflags=subprocess.CREATE_NO_WINDOW, timeout=max_duration + 1 if max_duration else None)
             except:
-                print("⚠️  Could not play audio silently")
+                print("⚠️  Could not play audio")
     else:  # Linux
         # Try various Linux audio players
         for player in ["paplay", "mpg123", "ffplay", "aplay"]:
             try:
-                subprocess.run([player, str(audio_file)], check=True)
+                process = subprocess.Popen([player, str(audio_file)], 
+                                          stdout=subprocess.DEVNULL, 
+                                          stderr=subprocess.DEVNULL)
+                if max_duration:
+                    try:
+                        process.wait(timeout=max_duration)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                        print(f"⏱️  Audio cut off after {max_duration}s")
+                else:
+                    process.wait()
                 break
             except FileNotFoundError:
                 continue
@@ -166,9 +209,12 @@ async def generate_narration(include_minecraft=False):
                     })
                     sfx_text = f" (SFX: {sfx_info['query']})" if sfx_info else ""
                     print(f"📝 Narration queued ({len(narration_queue)} in queue): {narration[:50]}...{sfx_text}")
-                
+    except KeyboardInterrupt:
+        raise
     except Exception as e:
-        print(f"❌ Error generating narration: {e}")
+        # Suppress process termination errors - they're expected during cleanup
+        if "Process group termination" not in str(e) and "TaskGroup" not in str(e):
+            print(f"❌ Error generating narration: {e}")
 
 async def process_audio_queue():
     """Process queued narrations and play audio"""
@@ -230,26 +276,29 @@ async def process_audio_queue():
                     
                     audio_path = SCREENSHOT_DIR / audio_filename
                     
-                # Download sound effect if available
-                sfx_path = None
-                if sfx_info:
-                    print(f"📥 Downloading SFX: {sfx_info['title']}")
-                    sfx_path = download_sfx(sfx_info['mp3'], f"sfx_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3")
+            # Download sound effect if available
+            sfx_path = None
+            if sfx_info:
+                print(f"📥 Downloading SFX: {sfx_info['title']}")
+                sfx_path = download_sfx(sfx_info['mp3'], f"sfx_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3")
+            
+            # Play narration first, then SFX
+            if audio_path.exists():
+                print(f"🎵 Playing narration...")
+                await asyncio.to_thread(play_audio, audio_path)
                 
-                # Play narration first, then SFX
-                if audio_path.exists():
-                    print(f"🎵 Playing narration...")
-                    await asyncio.to_thread(play_audio, audio_path)
-                    
-                    # Then play sound effect after narration finishes
-                    if sfx_path and sfx_path.exists():
-                        print(f"🎵 Playing sound effect...")
-                        await asyncio.to_thread(play_audio, sfx_path)
-                    
-                    print(f"✅ Audio playback completed")
-                    
+                # Then play sound effect after narration finishes (max 5 seconds)
+                if sfx_path and sfx_path.exists():
+                    print(f"🎵 Playing sound effect (max 5s)...")
+                    await asyncio.to_thread(play_audio, sfx_path, 5.0)
+                
+                print(f"✅ Audio playback completed")
+        except KeyboardInterrupt:
+            raise
         except Exception as e:
-            print(f"❌ Error processing audio: {e}")
+            # Suppress process termination errors - they're expected during cleanup
+            if "Process group termination" not in str(e) and "TaskGroup" not in str(e):
+                print(f"❌ Error processing audio: {e}")
         finally:
             is_playing_audio = False
             print(f"{'='*50}\n")
