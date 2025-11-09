@@ -37,6 +37,48 @@ class ToolHandlers:
         self.elevenlabs_client = elevenlabs_client
         self.minecraft_data_file = minecraft_data_file
         self.last_minecraft_data = None
+        self.recent_sfx = []  # Sliding window of last 10 SFX IDs/titles
+        self.max_recent_sfx = 10
+    
+    def _select_unique_sfx(self, available_sounds: list, max_attempts: int = 5) -> Optional[dict]:
+        """
+        Select a random SFX that hasn't been used recently.
+        Uses sliding window to avoid repetition.
+        
+        Args:
+            available_sounds: List of SFX dicts from API
+            max_attempts: Maximum reroll attempts before giving up
+        
+        Returns:
+            Selected SFX dict or None if all are recently used
+        """
+        import random
+        
+        if not available_sounds:
+            return None
+        
+        # Try to find a unique SFX
+        for attempt in range(max_attempts):
+            sfx = random.choice(available_sounds)
+            sfx_id = sfx.get("title", "")  # Use title as unique identifier
+            
+            # Check if this SFX was used recently
+            if sfx_id not in self.recent_sfx:
+                # Add to recent list
+                self.recent_sfx.append(sfx_id)
+                
+                # Maintain sliding window size
+                if len(self.recent_sfx) > self.max_recent_sfx:
+                    self.recent_sfx.pop(0)
+                
+                print(f"🎲 Selected: '{sfx_id}' (attempt {attempt + 1}, {len(self.recent_sfx)} in history)")
+                return sfx
+        
+        # If all attempts failed, just pick one and reset the window
+        print(f"⚠️  All SFX recently used, resetting window")
+        sfx = random.choice(available_sounds)
+        self.recent_sfx = [sfx.get("title", "")]
+        return sfx
     
     async def handle_get_screenshot(self, arguments: dict) -> list[TextContent | ImageContent]:
         """Get the last screenshots"""
@@ -238,21 +280,27 @@ Sound effect keywords: bruh, laugh, explosion, wow, scream, crash, fail, epic, o
         try:
             sfx_response = requests.get(
                 "https://api.myinstants.com/v1/instants/search",
-                params={"query": sfx_keyword, "limit": 1},
+                params={"query": sfx_keyword, "limit": 10},  # Get more options for variety
                 timeout=5
             )
             sfx_data = sfx_response.json()
             
             if sfx_data.get("results"):
-                sfx = sfx_data["results"][0]
-                result = {
-                    "narration": narration,
-                    "sfx": {
-                        "title": sfx.get("title", "Unknown"),
-                        "mp3": sfx.get("sound", ""),
-                        "query": sfx_keyword
+                # Use sliding window to select unique SFX
+                available_sounds = sfx_data["results"]
+                sfx = self._select_unique_sfx(available_sounds)
+                
+                if sfx:
+                    result = {
+                        "narration": narration,
+                        "sfx": {
+                            "title": sfx.get("title", "Unknown"),
+                            "mp3": sfx.get("sound", ""),
+                            "query": sfx_keyword
+                        }
                     }
-                }
+                else:
+                    result = {"narration": narration, "sfx": None}
             else:
                 result = {"narration": narration, "sfx": None}
         except Exception:
