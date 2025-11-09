@@ -25,11 +25,16 @@ SCREENSHOT_DIR = Path(os.getenv("SCREENSHOT_DIR", "./screenshots"))
 SCREENSHOT_DIR.mkdir(exist_ok=True)
 MINECRAFT_DATA_FILE = SCREENSHOT_DIR / "minecraft_data.json"
 CHECK_INTERVAL = 2  # Check for new events every 2 seconds
+BATCH_WAIT_TIME = 5  # Wait 5 seconds to batch multiple events before narrating
+MIN_NARRATION_INTERVAL = 3  # Minimum 3 seconds between narration requests (RPM control)
 
 # Global state for batching narrations
 narration_queue = []  # Now stores dicts with {narration, sfx}
+audio_queue = []  # Separate queue for generated audio ready to play
 is_playing_audio = False
 queue_lock = threading.Lock()
+audio_lock = threading.Lock()
+last_narration_time = 0  # Track last narration request for rate limiting
 
 def download_sfx(mp3_url: str, filename: str) -> Path:
     """
@@ -228,8 +233,11 @@ async def generate_audio_file(batch_narrations):
         return None
 
 async def minecraft_event_loop():
-    """Monitor Minecraft events and generate narrations"""
+    """Monitor Minecraft events and batch them before narrating"""
+    global last_narration_time
     last_timestamp = None
+    pending_events = []
+    last_event_time = None
     
     while True:
         # Check if Minecraft data file exists and has new events
@@ -242,6 +250,7 @@ async def minecraft_event_loop():
                 if not events:
                     # Reset timestamp when events are empty - stay silent
                     last_timestamp = None
+                    pending_events.clear()
                     await asyncio.sleep(CHECK_INTERVAL)
                     continue
                 
@@ -251,25 +260,39 @@ async def minecraft_event_loop():
                 
                 # If timestamp changed, we have new events
                 if current_timestamp != last_timestamp:
-                    print(f"🎮 New Minecraft events detected (latest: {latest_event.get('event_type')})")
-                    asyncio.create_task(generate_narration_from_minecraft())
+                    print(f"🎮 New event: {latest_event.get('event_type')} - {latest_event.get('event_source')}")
+                    pending_events.append(latest_event)
                     last_timestamp = current_timestamp
+                    last_event_time = time.time()
+                
+                # Check if we should process batched events
+                if pending_events and last_event_time:
+                    time_since_last_event = time.time() - last_event_time
+                    time_since_last_narration = time.time() - last_narration_time
+                    
+                    # Process if: waited long enough AND respecting rate limit
+                    if time_since_last_event >= BATCH_WAIT_TIME and time_since_last_narration >= MIN_NARRATION_INTERVAL:
+                        print(f"📦 Batching {len(pending_events)} event(s) for narration")
+                        asyncio.create_task(generate_narration_from_minecraft())
+                        last_narration_time = time.time()
+                        pending_events.clear()
+                        last_event_time = None
+                        
             except Exception as e:
                 print(f"⚠️  Error reading events: {e}")
         else:
             # Reset timestamp if file doesn't exist
             last_timestamp = None
+            pending_events.clear()
         
         await asyncio.sleep(CHECK_INTERVAL)
 
-async def process_audio_queue():
-    """Process queued narrations and play audio"""
-    global is_playing_audio
-    
+async def generate_audio_pipeline():
+    """Pipeline: Generate audio from narrations while previous audio plays"""
     while True:
         # Wait if no narrations queued
         if not narration_queue:
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.5)
             continue
         
         # Get ALL queued narrations
@@ -284,13 +307,12 @@ async def process_audio_queue():
         sfx_info = batch_items[0].get("sfx") if batch_items else None
         
         print(f"\n{'='*50}")
-        print(f"🎤 Summarizing {len(batch_narrations)} narration(s) into one sentence...")
+        print(f"🎤 Generating audio for {len(batch_narrations)} narration(s)...")
         if sfx_info:
             print(f"🎵 SFX selected: {sfx_info['title']} ({sfx_info['query']})")
         print(f"{'='*50}")
         
-        # Generate audio
-        is_playing_audio = True
+        # Generate audio (this happens in parallel with playback)
         audio_path = await generate_audio_file(batch_narrations)
         
         # Download sound effect if available
@@ -299,24 +321,53 @@ async def process_audio_queue():
             print(f"📥 Downloading SFX: {sfx_info['title']}")
             sfx_path = download_sfx(sfx_info['mp3'], f"sfx_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3")
         
+        # Add to audio queue for playback
         if audio_path and audio_path.exists():
-            try:
-                # Play narration first, then SFX
-                print(f"🎵 Playing narration...")
-                await asyncio.to_thread(play_audio, audio_path)
-                
-                # Then play sound effect after narration finishes (max 5 seconds)
-                if sfx_path and sfx_path.exists():
-                    print(f"🎵 Playing sound effect (max 5s)...")
-                    await asyncio.to_thread(play_audio, sfx_path, 5.0)
-                
-                print(f"✅ Audio playback completed")
-            except Exception as e:
-                print(f"❌ Error playing audio: {e}")
-                import traceback
-                traceback.print_exc()
+            with audio_lock:
+                audio_queue.append({
+                    "audio_path": audio_path,
+                    "sfx_path": sfx_path
+                })
+            print(f"✅ Audio ready for playback ({len(audio_queue)} in queue)")
         else:
-            print(f"⚠️  Audio file not found: {audio_path}")
+            print(f"⚠️  Audio generation failed")
+
+async def play_audio_pipeline():
+    """Pipeline: Play audio as soon as it's ready"""
+    global is_playing_audio
+    
+    while True:
+        # Wait if no audio ready
+        if not audio_queue:
+            await asyncio.sleep(0.5)
+            continue
+        
+        # Get next audio to play
+        with audio_lock:
+            if not audio_queue:
+                continue
+            audio_item = audio_queue.pop(0)
+        
+        audio_path = audio_item["audio_path"]
+        sfx_path = audio_item["sfx_path"]
+        
+        is_playing_audio = True
+        
+        try:
+            # Play narration first, then SFX
+            print(f"🎵 Playing narration...")
+            await asyncio.to_thread(play_audio, audio_path)
+            
+            # Then play sound effect after narration finishes (max 5 seconds)
+            if sfx_path and sfx_path.exists():
+                print(f"🎵 Playing sound effect (max 5s)...")
+                await asyncio.to_thread(play_audio, sfx_path, 5.0)
+            
+            print(f"✅ Audio playback completed")
+        except Exception as e:
+            print(f"❌ Error playing audio: {e}")
+            import traceback
+            traceback.print_exc()
         
         is_playing_audio = False
         print(f"{'='*50}\n")
@@ -364,10 +415,11 @@ async def main():
     print("\nPress Ctrl+C to stop\n")
     
     try:
-        # Run both loops concurrently
+        # Run all pipeline stages concurrently
         await asyncio.gather(
-            minecraft_event_loop(),
-            process_audio_queue()
+            minecraft_event_loop(),      # Stage 1: Detect & batch events
+            generate_audio_pipeline(),   # Stage 2: Generate audio
+            play_audio_pipeline()        # Stage 3: Play audio
         )
     except KeyboardInterrupt:
         print("\n\n👋 Stopping Minecraft narrator...")
