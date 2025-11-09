@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Screenshot Narrator MCP Server
+Narrator MCP Server
 Takes screenshots, describes changes, generates funny narration, and converts to speech
 
 Sound Effects Attribution:
@@ -18,76 +18,35 @@ from typing import Optional
 import google.generativeai as genai
 from mcp.server import Server
 from mcp.types import Tool, TextContent, ImageContent
+from mcp_utilities import (
+    cleanup_old_screenshots,
+    cleanup_old_audio,
+    encode_image,
+    get_sfx_query_from_narration,
+    get_last_screenshots
+)
 import mcp.server.stdio
 from PIL import Image
 import subprocess
 from elevenlabs import ElevenLabs
 import requests
 
-# Initialize clients
+# Initialize clients for API
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 gemini_model = genai.GenerativeModel('gemini-2.5-flash')
 elevenlabs_client = ElevenLabs(api_key=os.getenv("ELEVENLABS_API_KEY"))
 
-# Screenshot directory
+# Screenshot directory - created at runtime if it doesn't exist
 SCREENSHOT_DIR = Path(os.getenv("SCREENSHOT_DIR", "./screenshots"))
 SCREENSHOT_DIR.mkdir(exist_ok=True)
 MAX_SCREENSHOTS = 5
 
-# Minecraft mod data storage
+# Minecraft mod data storage - file created by minecraft_receiver.py when events arrive
 MINECRAFT_DATA_FILE = SCREENSHOT_DIR / "minecraft_data.json"
 last_minecraft_data = None
 
-app = Server("screenshot-narrator")
+app = Server("narrator")
 
-def cleanup_old_screenshots():
-    """Keep only the last MAX_SCREENSHOTS images"""
-    screenshots = sorted(SCREENSHOT_DIR.glob("*.png"), key=os.path.getmtime)
-    while len(screenshots) > MAX_SCREENSHOTS:
-        oldest = screenshots.pop(0)
-        oldest.unlink()
-
-def cleanup_old_audio():
-    """Keep only the last 2 audio files"""
-    audio_files = sorted(SCREENSHOT_DIR.glob("*.mp3"), key=os.path.getmtime)
-    while len(audio_files) > 2:
-        oldest = audio_files.pop(0)
-        oldest.unlink()
-
-def get_sfx_query_from_narration(narration: str) -> str:
-    """
-    Fallback function to extract keyword from narration if AI doesn't provide one.
-    
-    Sound effects provided by MyInstants API (https://github.com/abdipr/myinstants-api)
-    Sounds sourced from MyInstants.com via web scraping.
-    """
-    narration_lower = narration.lower()
-    
-    # Simple keyword matching as fallback
-    if any(word in narration_lower for word in ["laugh", "funny", "hilarious", "laughing"]):
-        return "laugh"
-    elif any(word in narration_lower for word in ["died", "death", "fail", "falling", "fell"]):
-        return "bruh"
-    elif any(word in narration_lower for word in ["explosion", "explode", "boom", "tnt", "blew"]):
-        return "explosion"
-    elif any(word in narration_lower for word in ["wow", "amazing", "incredible"]):
-        return "wow"
-    elif any(word in narration_lower for word in ["scream", "yell", "shout"]):
-        return "scream"
-    elif any(word in narration_lower for word in ["crash", "smash", "break"]):
-        return "crash"
-    else:
-        return "bruh"  # default
-
-def get_last_screenshots(count: int = 2):
-    """Get the last N screenshots from the directory"""
-    screenshots = sorted(SCREENSHOT_DIR.glob("*.png"), key=os.path.getmtime, reverse=True)
-    return screenshots[:count]
-
-def encode_image(image_path: Path) -> str:
-    """Encode image to base64"""
-    with open(image_path, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
 
 @app.list_tools()
 async def list_tools() -> list[Tool]:
@@ -224,8 +183,8 @@ async def list_tools() -> list[Tool]:
 @app.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent | ImageContent]:
     if name == "get_screenshot":
-        cleanup_old_screenshots()
-        screenshots = get_last_screenshots(2)
+        cleanup_old_screenshots(SCREENSHOT_DIR, MAX_SCREENSHOTS)
+        screenshots = get_last_screenshots(SCREENSHOT_DIR, 2)
         
         if not screenshots:
             return [TextContent(type="text", text="No screenshots found")]
@@ -267,7 +226,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent | ImageConte
         # Get screenshots if requested
         screenshots = []
         if image_count > 0:
-            screenshots = get_last_screenshots(image_count)
+            screenshots = get_last_screenshots(SCREENSHOT_DIR, image_count)
         
         # Get Minecraft data if requested
         minecraft_context = ""
@@ -338,7 +297,7 @@ Generate 1-2 sentences of funny, sarcastic narration (like a sports commentator 
         # Get screenshots if requested
         screenshots = []
         if image_count > 0:
-            screenshots = get_last_screenshots(image_count)
+            screenshots = get_last_screenshots(SCREENSHOT_DIR, image_count)
         
         # Get Minecraft data if requested
         minecraft_context = ""
@@ -545,7 +504,7 @@ ONE SENTENCE ONLY that captures everything important."""
         output_path = SCREENSHOT_DIR / output_file
         
         # Cleanup old audio files first
-        cleanup_old_audio()
+        cleanup_old_audio(SCREENSHOT_DIR, 2)
         
         # Use ElevenLabs TTS with custom voice ID and settings
         from elevenlabs import VoiceSettings
